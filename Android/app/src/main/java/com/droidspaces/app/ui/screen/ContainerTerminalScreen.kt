@@ -662,8 +662,7 @@ private val VIRTUAL_KEYS_LAYOUT = """
     {"key": "-", "popup": "|"},
     "HOME",
     "UP",
-    "END",
-    "PGUP"
+    "END"
   ],
   [
     "TAB",
@@ -671,8 +670,7 @@ private val VIRTUAL_KEYS_LAYOUT = """
     "ALT",
     "LEFT",
     "DOWN",
-    "RIGHT",
-    "PGDN"
+    "RIGHT"
   ]
 ]
 """.trimIndent()
