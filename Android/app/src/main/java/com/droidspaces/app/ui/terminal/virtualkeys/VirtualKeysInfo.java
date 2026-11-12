@@ -9,6 +9,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * The key matrix {@link VirtualKeysView} shows. {@code propertiesInfo} is a JSON array of rows;
  * each key is a name ("HOME") or an object with {@code key} or {@code macro}, an optional
@@ -31,10 +34,13 @@ public class VirtualKeysInfo {
     Object[][] matrix = new Object[arr.length()][];
     for (int i = 0; i < arr.length(); i++) {
       JSONArray line = arr.getJSONArray(i);
-      matrix[i] = new Object[line.length()];
+      List<Object> row = new ArrayList<>();
       for (int j = 0; j < line.length(); j++) {
-        matrix[i][j] = line.get(j);
+        Object key = line.get(j);
+        if ("PGUP".equals(key) || "PGDN".equals(key)) continue;
+        row.add(key);
       }
+      matrix[i] = row.toArray();
     }
 
     // convert matrix to buttons
@@ -83,7 +89,6 @@ public class VirtualKeysInfo {
     }
     return jobject;
   }
-
 
   /**
    * Initialize {@link VirtualKeysInfo}.
