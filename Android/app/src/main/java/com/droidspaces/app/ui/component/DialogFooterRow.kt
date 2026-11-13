@@ -45,7 +45,7 @@ fun DialogFooterRow(
     confirmEnabled: Boolean = true,
     destructive: Boolean = false,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(8.dp)
     val confirmFill = when {
         !confirmEnabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
         destructive -> MaterialTheme.colorScheme.error
@@ -113,7 +113,7 @@ fun DialogDismissButton(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(8.dp)
     Surface(
         modifier = modifier
             .fillMaxWidth()

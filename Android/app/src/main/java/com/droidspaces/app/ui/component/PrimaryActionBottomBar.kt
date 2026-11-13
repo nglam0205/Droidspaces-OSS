@@ -55,7 +55,7 @@ fun PrimaryActionBottomBar(
     barColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     dividerAlpha: Float = 0.25f,
     horizontalPadding: Dp = 24.dp,
-    shape: Shape = RoundedCornerShape(20.dp),
+    shape: Shape = RoundedCornerShape(12.dp),
     labelFontSize: TextUnit = TextUnit.Unspecified,
 ) {
     val fg = if (enabled) contentColor else disabledContentColor
@@ -95,7 +95,7 @@ fun PrimaryActionBottomBar(
     barColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     dividerAlpha: Float = 0.25f,
     horizontalPadding: Dp = 24.dp,
-    shape: Shape = RoundedCornerShape(20.dp),
+    shape: Shape = RoundedCornerShape(12.dp),
     content: @Composable RowScope.() -> Unit,
 ) {
     // A short window keeps the button but not the generous padding around it.

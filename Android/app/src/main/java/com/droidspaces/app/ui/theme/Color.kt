@@ -46,6 +46,52 @@ enum class ThemePalette(
     // hues at tone 70 with the chroma pushed up (60, 36, 48 in HCT).
     val swatch: List<Color>? = null,
 ) {
+    /*
+     * The app's own scheme. Graphite surfaces, one signal colour that is only ever
+     * used for state or action, and a cool steel secondary so status hues never have
+     * to compete with the accent. This is the default palette and the one the new
+     * design language is drawn against.
+     */
+    GRAPHITE(
+        displayName = "Graphite",
+        swatch = listOf(Color(0xFFC6F24E), Color(0xFF9AB4C4), Color(0xFFF5B94C)),
+        fixedLight = lightColorScheme(
+            primary = Color(0xFF3F5F00), onPrimary = Color(0xFFFFFFFF),
+            primaryContainer = Color(0xFFD6F59B), onPrimaryContainer = Color(0xFF172300),
+            inversePrimary = Color(0xFFB4DC55),
+            secondary = Color(0xFF47606D), onSecondary = Color(0xFFFFFFFF),
+            secondaryContainer = Color(0xFFD3E8F3), onSecondaryContainer = Color(0xFF081E29),
+            tertiary = Color(0xFF7A5B00), onTertiary = Color(0xFFFFFFFF),
+            tertiaryContainer = Color(0xFFFFDEA3), onTertiaryContainer = Color(0xFF271900),
+            background = Color(0xFFF3F4EF), onBackground = Color(0xFF15181A),
+            surface = Color(0xFFF3F4EF), onSurface = Color(0xFF15181A),
+            surfaceVariant = Color(0xFFE2E6DF), onSurfaceVariant = Color(0xFF444B4F),
+            inverseSurface = Color(0xFF2A2F32), inverseOnSurface = Color(0xFFF1F2ED),
+            outline = Color(0xFF747C80), outlineVariant = Color(0xFFC6CCC5),
+            surfaceBright = Color(0xFFF9FAF5), surfaceDim = Color(0xFFDADDD6),
+            surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF7F8F2),
+            surfaceContainer = Color(0xFFEEF0E9), surfaceContainerHigh = Color(0xFFE8EAE3),
+            surfaceContainerHighest = Color(0xFFE1E4DD),
+        ),
+        fixedDark = darkColorScheme(
+            primary = Color(0xFFC6F24E), onPrimary = Color(0xFF1B2300),
+            primaryContainer = Color(0xFF2B3A05), onPrimaryContainer = Color(0xFFDFFFA3),
+            inversePrimary = Color(0xFF3F5F00),
+            secondary = Color(0xFF9AB4C4), onSecondary = Color(0xFF0E1B22),
+            secondaryContainer = Color(0xFF1D303A), onSecondaryContainer = Color(0xFFC6DEEC),
+            tertiary = Color(0xFFF5B94C), onTertiary = Color(0xFF2A1A00),
+            tertiaryContainer = Color(0xFF4A3405), onTertiaryContainer = Color(0xFFFFDEA3),
+            background = Color(0xFF0A0C0E), onBackground = Color(0xFFE9EEF2),
+            surface = Color(0xFF0A0C0E), onSurface = Color(0xFFE9EEF2),
+            surfaceVariant = Color(0xFF22282D), onSurfaceVariant = Color(0xFFA9B4BC),
+            inverseSurface = Color(0xFFE9EEF2), inverseOnSurface = Color(0xFF1A1F23),
+            outline = Color(0xFF66737D), outlineVariant = Color(0xFF2A3239),
+            surfaceBright = Color(0xFF22282D), surfaceDim = Color(0xFF0A0C0E),
+            surfaceContainerLowest = Color(0xFF050607), surfaceContainerLow = Color(0xFF0F1214),
+            surfaceContainer = Color(0xFF14181B), surfaceContainerHigh = Color(0xFF1A1F23),
+            surfaceContainerHighest = Color(0xFF22282D),
+        ),
+    ),
     // The Material You scheme One UI built from a green wallpaper, seed #8CB496 in the
     // Tonal Spot style, read off the phone's system_* colour resources
     BROCCOLI(
@@ -281,6 +327,6 @@ enum class ThemePalette(
 
     companion object {
         fun fromName(name: String): ThemePalette =
-            entries.find { it.name == name } ?: BROCCOLI
+            entries.find { it.name == name } ?: GRAPHITE
     }
 }

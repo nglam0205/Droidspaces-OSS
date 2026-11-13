@@ -44,9 +44,9 @@ fun SettingsGroup(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth().padding(horizontal = screenGutter()),
-        shape = RoundedCornerShape(24.dp),
-        color = if (MaterialTheme.colorScheme.isDark) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
         tonalElevation = 0.dp
     ) {
         Column(content = content)

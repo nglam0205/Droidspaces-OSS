@@ -33,7 +33,7 @@ fun DsMenuTheme(content: @Composable () -> Unit) {
             surfaceContainer = menuColor,
             surfaceTint = Color.Transparent
         ),
-        shapes = MaterialTheme.shapes.copy(extraSmall = RoundedCornerShape(20.dp)),
+        shapes = MaterialTheme.shapes.copy(extraSmall = RoundedCornerShape(12.dp)),
         // The app theme is Expressive for the installer's shape morphs, and menus inherit
         // its spring and overshoot on open. Menus keep the standard motion.
         motionScheme = MotionScheme.standard(),
@@ -46,5 +46,5 @@ fun DsMenuTheme(content: @Composable () -> Unit) {
 fun Modifier.dsMenuBorder(): Modifier = border(
     width = 1.dp,
     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-    shape = RoundedCornerShape(20.dp)
+    shape = RoundedCornerShape(12.dp)
 )

@@ -111,7 +111,7 @@ private fun AddBindMountSheet(existing: List<BindMount>, onDismiss: () -> Unit, 
             )
         }
     ) {
-        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             NavRow(
                 icon = Icons.Default.FolderOpen,
                 title = context.getString(R.string.folder_on_phone),
@@ -130,7 +130,7 @@ private fun AddBindMountSheet(existing: List<BindMount>, onDismiss: () -> Unit, 
             isError = dest.isNotEmpty() && (!destOk || taken),
             keyboardType = KeyboardType.Uri
         )
-        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             SwitchItem(
                 icon = Icons.Default.Lock,
                 title = context.getString(R.string.read_only),

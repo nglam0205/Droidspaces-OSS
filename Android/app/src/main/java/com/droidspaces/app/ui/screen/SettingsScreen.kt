@@ -48,6 +48,7 @@ import com.droidspaces.app.ui.component.GroupHeader
 import com.droidspaces.app.ui.component.NavRow
 import com.droidspaces.app.ui.component.SettingsGroup
 import com.droidspaces.app.ui.component.SwitchItem
+import com.droidspaces.app.ui.design.DsPageHeader
 import com.droidspaces.app.ui.theme.ThemePalette
 import com.droidspaces.app.ui.theme.rememberThemeState
 import com.droidspaces.app.ui.viewmodel.AppStateViewModel
@@ -128,38 +129,17 @@ fun SettingsScreen(
         }
     }
 
-    Scaffold(
-        containerColor = Color.Transparent,
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = context.getString(R.string.settings),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = context.getString(R.string.back)
-                        )
-                    }
-                },
-                scrollBehavior = scrollBehavior,
-                windowInsets = WindowInsets.safeDrawing.only(
-                    WindowInsetsSides.Top + WindowInsetsSides.Horizontal
-                )
-            )
-        },
-        contentWindowInsets = WindowInsets(0)
-    ) { innerPadding ->
+    Column(modifier = Modifier.fillMaxSize()) {
+        DsPageHeader(
+            title = context.getString(R.string.settings),
+            eyebrow = "Application",
+            subtitle = "Backend, appearance and about",
+            onBack = onBack
+        )
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+                .weight(1f)
+                .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
             // Backend Reinstallation Section
@@ -473,7 +453,7 @@ private fun AboutDialog(onDismiss: () -> Unit) {
             SectionHeader(text = context.getString(R.string.developers))
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
             ) {
@@ -499,7 +479,7 @@ private fun AboutDialog(onDismiss: () -> Unit) {
             }
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
             ) {

@@ -73,7 +73,7 @@ fun EnvironmentVariablesPage(initial: String, onSave: (String) -> Unit, onClose:
                 )
             },
             visualTransformation = syntax,
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(12.dp),
             colors = DsTextFieldDefaults.colors(),
             textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = JetBrainsMono),
             keyboardOptions = KeyboardOptions(

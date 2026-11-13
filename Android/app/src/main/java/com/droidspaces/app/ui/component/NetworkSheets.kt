@@ -246,7 +246,7 @@ private fun PickList(items: List<String>?, modifier: Modifier = Modifier, row: @
         return
     }
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = modifier.fillMaxWidth()
     ) {

@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.droidspaces.app.R
 import com.droidspaces.app.ui.component.SaveActionBottomBar
+import com.droidspaces.app.ui.design.DsPageHeader
 import com.droidspaces.app.ui.util.LoadingIndicator
 import com.droidspaces.app.ui.viewmodel.ContainerViewModel
 import com.droidspaces.app.util.ContainerInfo
@@ -103,16 +104,11 @@ fun AutoBootPriorityScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(context.getString(R.string.auto_boot_priority), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = context.getString(R.string.back)
-                        )
-                    }
-                }
+            DsPageHeader(
+                title = context.getString(R.string.auto_boot_priority),
+                eyebrow = "Startup",
+                subtitle = "Order in which containers come up",
+                onBack = onBack
             )
         },
         bottomBar = {

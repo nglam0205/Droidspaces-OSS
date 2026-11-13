@@ -69,7 +69,7 @@ fun DsBottomSheet(
             // A sheet tall enough to reach the top would draw its title under the
             // status bar, so the space it may grow into stops below it.
             modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)),
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 0.dp,
             contentWindowInsets = { WindowInsets(0) },

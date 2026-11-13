@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.BorderStroke
 import com.droidspaces.app.R
 import com.droidspaces.app.ui.component.DsSnackbarHost
+import com.droidspaces.app.ui.design.DsPageHeader
 import com.droidspaces.app.ui.component.TerminalDialog
 import com.droidspaces.app.ui.viewmodel.AppStateViewModel
 import com.droidspaces.app.util.Constants
@@ -77,22 +78,11 @@ fun RequirementsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = context.getString(R.string.requirements),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = context.getString(R.string.back)
-                        )
-                    }
-                }
+            DsPageHeader(
+                title = context.getString(R.string.requirements),
+                eyebrow = "Kernel",
+                subtitle = "What Droidspaces needs from the host",
+                onBack = onNavigateBack
             )
         }
     ) { padding ->
@@ -369,7 +359,7 @@ private fun ExpandableKernelRequirementsSection(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
@@ -431,7 +421,7 @@ private fun CodeBox(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest, // Level up for depth
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
@@ -506,7 +496,7 @@ private fun CheckRequirementsButton(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(12.dp)
     val alpha = if (enabled && !isRunning) 1f else 0.5f
 
     Surface(

@@ -319,7 +319,7 @@ private fun RootfsAssetCard(
     onRetry: () -> Unit
 ) {
     val context = LocalContext.current
-    val cardShape = RoundedCornerShape(20.dp)
+    val cardShape = RoundedCornerShape(12.dp)
 
     Surface(
         modifier = Modifier.fillMaxWidth().clip(cardShape),
@@ -538,7 +538,7 @@ private fun RepoSourceBanner() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
     ) {
