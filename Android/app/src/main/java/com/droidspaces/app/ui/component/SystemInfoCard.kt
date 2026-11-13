@@ -97,12 +97,12 @@ private fun SystemInfoItem(
     title: String,
     description: String
 ) {
-    // MMRL-style padding: vertical = 16.dp, horizontal = 25.dp
+    // Same inner padding as every other card, from CardMetrics.
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 16.dp, horizontal = 25.dp)
+            .padding(CardContentPadding)
     ) {
         Icon(
             imageVector = icon,

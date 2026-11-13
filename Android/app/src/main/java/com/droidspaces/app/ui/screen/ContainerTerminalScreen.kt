@@ -39,6 +39,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.droidspaces.app.ui.component.DsDialog
 import com.droidspaces.app.service.TerminalSessionService
 import com.droidspaces.app.ui.component.DialogFooterRow
+import com.droidspaces.app.ui.terminal.NoOpTerminalSessionClient
 import com.droidspaces.app.ui.terminal.TerminalBackEnd
 import com.droidspaces.app.ui.terminal.TerminalScreenState
 import com.droidspaces.app.ui.terminal.virtualkeys.VirtualKeysConstants
@@ -74,6 +75,9 @@ private data class TerminalTab(
     val user: String,
     val label: String,
 )
+
+/** What the Termux renderer was last built with; see the update block below. */
+private class AppliedAppearance(var sizePx: Int, var typeface: Typeface?)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -457,6 +461,18 @@ private fun TerminalTabView(
     // Holds this tab's client so the button acts on the terminal it sits on,
     // rather than on whichever view TerminalScreenState last saw.
     var backEnd by remember { mutableStateOf<TerminalBackEnd?>(null) }
+    // setTextSize() builds a fresh TerminalRenderer and re-measures the grid, so
+    // the update block below must not call it on every recomposition.
+    val appliedAppearance = remember { AppliedAppearance(fontSizePx, terminalTypeface) }
+
+    LaunchedEffect(isVisible) {
+        if (!isVisible) {
+            // AnimatedVisibility disposes a hidden tab's views, but the service keeps
+            // the session, and with it this tab's client. Dropping the client here
+            // lets the dead TerminalView go; the factory re-attaches on the way back.
+            binder.getSession(tab.id)?.updateTerminalSessionClient(NoOpTerminalSessionClient)
+        }
+    }
     // Termux TerminalColors indices: 256 = default foreground, 257 = background,
     // 258 = cursor. Dark mode uses the classic termux white-on-black scheme:
     // pure white foreground on pure black background.
@@ -502,6 +518,8 @@ private fun TerminalTabView(
                                     initialFontSizePx = fontSizePx,
                                     onSessionFinished = onSessionFinished,
                                     onFontSizeChanged = { newSize ->
+                                        // The backend already applied it to this view.
+                                        appliedAppearance.sizePx = newSize
                                         TerminalSessionService.globalSessionList[tab.id]?.let { info ->
                                             TerminalSessionService.globalSessionList[tab.id] = info.copy(fontSizePx = newSize)
                                         }
@@ -535,9 +553,15 @@ private fun TerminalTabView(
                     },
                     update = { tv ->
                         if (isVisible) {
-                            // Re-apply before setTextSize: termux renderer resets typeface on size changes
-                            tv.setTypeface(terminalTypeface)
-                            tv.setTextSize(fontSizePx)
+                            if (appliedAppearance.sizePx != fontSizePx ||
+                                appliedAppearance.typeface != terminalTypeface
+                            ) {
+                                // Typeface first: setTextSize() keeps the renderer's typeface.
+                                tv.setTypeface(terminalTypeface)
+                                tv.setTextSize(fontSizePx)
+                                appliedAppearance.sizePx = fontSizePx
+                                appliedAppearance.typeface = terminalTypeface
+                            }
                             tv.onScreenUpdated()
                             TerminalScreenState.terminalView = WeakReference(tv)
                         }
@@ -575,7 +599,11 @@ private fun TerminalTabView(
                     if (isVisible) {
                         TerminalScreenState.virtualKeysView = WeakReference(vkv)
                         vkv.buttonTextColor = terminalForeground
-                        binder.getSession(tab.id)?.let { vkv.virtualKeysViewClient = VirtualKeysListener(it) }
+                        // The session outlives this view, so only the factory's first
+                        // listener is needed; re-registering here allocated one per pass.
+                        if (vkv.virtualKeysViewClient == null) {
+                            binder.getSession(tab.id)?.let { vkv.virtualKeysViewClient = VirtualKeysListener(it) }
+                        }
                     }
                 },
                 modifier = Modifier

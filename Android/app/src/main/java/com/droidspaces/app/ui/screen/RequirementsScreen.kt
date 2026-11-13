@@ -340,7 +340,7 @@ CONFIG_TMPFS_XATTR=y
     if (showLogViewer) {
         TerminalDialog(
             title = context.getString(R.string.requirements_check_title),
-            logs = checkLogs.toList(),
+            logs = checkLogs,
             onDismiss = {
                 showLogViewer = false
             },

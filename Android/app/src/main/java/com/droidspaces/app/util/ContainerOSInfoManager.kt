@@ -17,8 +17,14 @@ import org.json.JSONObject
 object ContainerOSInfoManager {
     private const val TAG = "ContainerOSInfoManager"
 
-    // In-memory cache for OS info (container name -> OSInfo)
-    private val cache = mutableMapOf<String, OSInfo>()
+    // Written from the IO polling loop and read from the main thread; a plain
+    // HashMap had no ordering between the two.
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, OSInfo>()
+
+    // What the last persistent write held. fetchAll runs every two seconds, and
+    // commit() is a synchronous disk write, so rewriting the same identity fields
+    // on every tick was the most expensive thing this class did.
+    private val persisted = java.util.concurrent.ConcurrentHashMap<String, OSInfo>()
 
     // Increments every time the icon cache is updated, Composables observe this to re-read icons
     val iconCacheVersion = mutableIntStateOf(0)
@@ -80,12 +86,12 @@ object ContainerOSInfoManager {
                     name = osInfo.name ?: existing.name
                 )
                 cache[containerName] = updated
-                PreferencesManager.getInstance(appContext).saveContainerOSInfo(containerName, updated)
+                persistIfChanged(appContext, containerName, updated)
             } else {
                 // No existing entry: write to persistent prefs only (for icon rendering on next
                 // app start), but skip in-memory cache so getCachedOSInfo returns null and the
                 // ViewModel's fetchAll() loop populates a full entry with hostname.
-                PreferencesManager.getInstance(appContext).saveContainerOSInfo(containerName, osInfo)
+                persistIfChanged(appContext, containerName, osInfo)
             }
             iconCacheVersion.intValue++
             Log.i(TAG, "Icon prefetch done for $containerName: ${osInfo.prettyName}")
@@ -109,11 +115,10 @@ object ContainerOSInfoManager {
             val out = (0 until running.length())
                 .map { running.getJSONObject(it) }
                 .associate { it.getString("name") to toOSInfo(it, ramTotalKb) }
-            val prefs = PreferencesManager.getInstance(appContext)
             out.forEach { (name, info) ->
                 cache[name] = info
                 // Only persist if we got valid OS info; don't overwrite with a failed fetch
-                if (info.prettyName != null) prefs.saveContainerOSInfo(name, info)
+                if (info.prettyName != null) persistIfChanged(appContext, name, info)
             }
             out
         } catch (e: Exception) {
@@ -175,7 +180,27 @@ object ContainerOSInfoManager {
     /** Forgets one container, in memory and in the persistent cache. */
     fun clearCache(containerName: String, appContext: Context? = null) {
         cache.remove(containerName)
+        persisted.remove(containerName)
         (appContext ?: context)?.let { PreferencesManager.getInstance(it).clearContainerOSInfo(containerName) }
+    }
+
+    /**
+     * The persistent entry only holds identity fields, and those change when the
+     * container is replaced or its distro upgraded. Uptime and the live counters
+     * change every tick, so they stay out of the comparison: the saved copy is only
+     * ever used to paint the card before the first fetch.
+     */
+    private fun persistIfChanged(appContext: Context, containerName: String, info: OSInfo) {
+        val previous = persisted[containerName]
+        if (previous != null &&
+            previous.prettyName == info.prettyName && previous.name == info.name &&
+            previous.version == info.version && previous.versionId == info.versionId &&
+            previous.id == info.id && previous.hostname == info.hostname &&
+            previous.ipAddress == info.ipAddress
+        ) return
+
+        PreferencesManager.getInstance(appContext).saveContainerOSInfo(containerName, info)
+        persisted[containerName] = info
     }
 
     /** KEY=value lines, quotes stripped; the five fields the card shows. */

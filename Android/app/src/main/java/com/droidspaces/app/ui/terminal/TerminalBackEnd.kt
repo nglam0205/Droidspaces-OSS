@@ -26,7 +26,11 @@ class TerminalBackEnd(
 
     private var currentFontSizePx: Float = initialFontSizePx.toFloat()
 
-    override fun onTextChanged(changedSession: TerminalSession) { terminal.onScreenUpdated() }
+    override fun onTextChanged(changedSession: TerminalSession) {
+        // A hidden tab's view may already be detached (or never laid out). Repainting it
+        // is wasted work; the re-attach in the AndroidView update paints the buffer once.
+        if (terminal.isAttachedToWindow) terminal.onScreenUpdated()
+    }
     override fun onTitleChanged(changedSession: TerminalSession) {}
 
     override fun onSessionFinished(finishedSession: TerminalSession) {

@@ -148,24 +148,33 @@ fun RunningContainerCard(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
-            // OS info rows
-            osInfo?.prettyName?.let { distro ->
+            // OS info rows. The first poll lands a moment after the card, and empty
+            // "Uptime:" / "IP:" rows read as broken data; say it is loading instead.
+            if (osInfo == null) {
                 Text(
-                    text = distro,
+                    text = context.getString(R.string.loading),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            } else {
+                osInfo.prettyName?.let { distro ->
+                    Text(
+                        text = distro,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+                Text(
+                    text = context.getString(R.string.uptime_label, context.getString(R.string.uptime), osInfo.uptime ?: ""),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+                Text(
+                    text = context.getString(R.string.ip_address_label, context.getString(R.string.ip_address), osInfo.ipAddress ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             }
-            Text(
-                text = context.getString(R.string.uptime_label, context.getString(R.string.uptime), osInfo?.uptime ?: ""),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-            Text(
-                text = context.getString(R.string.ip_address_label, context.getString(R.string.ip_address), osInfo?.ipAddress ?: ""),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
 
 
             // Resource usage row, only shown when we have real data. Null is the

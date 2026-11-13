@@ -47,6 +47,16 @@ enum class SparseOp { MIGRATE, RESIZE }
  */
 class ContainerOperationsViewModel(app: Application) : AndroidViewModel(app) {
 
+    private companion object {
+        // A boot or package-install log can run to thousands of lines. Each append
+        // invalidates the snapshot list the console reads, so an unbounded buffer
+        // costs more the longer it gets.
+        const val MAX_LOG_LINES = 2000
+        // Drop a batch, not a line: the console composes by position, so every trim
+        // re-annotates the lines that moved into different slots.
+        const val TRIM_LOG_LINES = 500
+    }
+
     private val appContext get() = getApplication<Application>()
     private val prefsManager get() = PreferencesManager.getInstance(appContext)
 
@@ -88,6 +98,13 @@ class ContainerOperationsViewModel(app: Application) : AndroidViewModel(app) {
         containerLogs = containerLogs.toMutableMap()
     }
 
+    /** Streaming logger that keeps the buffer under [MAX_LOG_LINES]. */
+    private fun bufferLogger(logs: SnapshotStateList<Pair<Int, String>>) =
+        ViewModelLogger { level, message ->
+            logs.add(level to message)
+            if (logs.size > MAX_LOG_LINES) logs.removeRange(0, TRIM_LOG_LINES)
+        }
+
     private fun string(resId: Int, vararg args: Any): String =
         if (args.isEmpty()) appContext.getString(resId) else appContext.getString(resId, *args)
 
@@ -124,7 +141,7 @@ class ContainerOperationsViewModel(app: Application) : AndroidViewModel(app) {
         logs.clear()
         prefsManager.clearContainerLogs(container.name)
 
-        val logger = ViewModelLogger { level, message -> logs.add(level to message) }
+        val logger = bufferLogger(logs)
 
         var scriptFile: File? = null
         var tempArchive: File? = null
@@ -244,7 +261,7 @@ class ContainerOperationsViewModel(app: Application) : AndroidViewModel(app) {
         prefsManager.clearContainerLogs(container.name)
         showLogViewerFor = container.name
 
-        val logger = ViewModelLogger { level, message -> logs.add(level to message) }
+        val logger = bufferLogger(logs)
 
         try {
             if (operation == "stop" || operation == "restart") {
@@ -303,7 +320,7 @@ class ContainerOperationsViewModel(app: Application) : AndroidViewModel(app) {
         logs.clear()
         prefsManager.clearContainerLogs(container.name)
 
-        val logger = ViewModelLogger { level, message -> logs.add(level to message) }
+        val logger = bufferLogger(logs)
 
         var scriptFile: File? = null
         try {

@@ -58,6 +58,11 @@ fun ControlPanelScreen(
 
     // Get running containers - derived from ViewModel state
     val runningContainers = containerViewModel.containerList.filter { it.isRunning }
+    // Restart the poll loop only when the running set changes. Keying it on the
+    // ContainerInfo list meant a config edit or a new pid tore down the loop.
+    val runningNames by remember {
+        derivedStateOf { containerViewModel.containerList.filter { it.isRunning }.map { it.name } }
+    }
     val entries = rememberAnimatedEntries(runningContainers) { it.name }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -67,7 +72,7 @@ fun ControlPanelScreen(
     // cancels the loop on background / tab-away and restarts it on return, so
     // re-opening the app on the Panel tab resumes polling without a tab switch.
     // Restarts whenever the running container set changes.
-    LaunchedEffect(runningContainers) {
+    LaunchedEffect(runningNames) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             // A container that died on its own (poweroff inside it) is only noticed by
             // this poll, so it has to tell the list, or its card stays up with no stats.

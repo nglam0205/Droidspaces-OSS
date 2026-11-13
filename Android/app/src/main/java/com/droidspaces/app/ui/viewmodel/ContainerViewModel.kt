@@ -10,10 +10,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.droidspaces.app.util.ContainerInfo
 import com.droidspaces.app.util.ContainerOSInfoManager
+import com.droidspaces.app.util.ContainerUsersManager
 import com.droidspaces.app.util.ContainerManager
 import com.droidspaces.app.util.PreferencesManager
 import com.topjohnwu.superuser.Shell
 import com.droidspaces.app.util.Constants
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -57,6 +59,15 @@ class ContainerViewModel(application: Application) : AndroidViewModel(applicatio
     // Current refresh job for cancellation
     private var refreshJob: Job? = null
 
+    // A cancelled refresh still runs its finally block, which used to clear the
+    // indicator after the next refresh had already set it.
+    private var refreshGeneration = 0
+
+    // Running names from the previous refresh. A refresh lands on every operation and
+    // on log-close, so re-running the per-container shell work for the whole list is
+    // what made those feel slow on a phone with many containers.
+    private var lastRunningNames: Set<String> = emptySet()
+
     val containerList: List<ContainerInfo>
         get() = _containers
 
@@ -76,6 +87,7 @@ class ContainerViewModel(application: Application) : AndroidViewModel(applicatio
     fun fetchContainerList() {
         // Cancel any ongoing refresh
         refreshJob?.cancel()
+        val generation = ++refreshGeneration
 
         refreshJob = viewModelScope.launch {
             isRefreshing = true
@@ -89,12 +101,14 @@ class ContainerViewModel(application: Application) : AndroidViewModel(applicatio
 
                 Log.i(TAG, "Container list refreshed: ${result.size} containers, ${result.count { it.isRunning }} running")
 
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to fetch container list", e)
                 // Keep existing containers on error - don't clear
 
             } finally {
-                isRefreshing = false
+                if (generation == refreshGeneration) isRefreshing = false
             }
         }
     }
@@ -108,27 +122,37 @@ class ContainerViewModel(application: Application) : AndroidViewModel(applicatio
         prefsManager.saveCachedContainers(result)
         prefsManager.cachedRunningCount = result.count { it.isRunning }
 
-        // Prefetch distro icons for running containers (updates persistent cache)
-        result.filter { it.isRunning }.forEach { container ->
+        val runningNames = result.filter { it.isRunning }.mapTo(mutableSetOf()) { it.name }
+        val started = runningNames - lastRunningNames
+        lastRunningNames = runningNames
+
+        // Only containers that just started need the icon prefetch. `prefetchDistroIcon`
+        // re-reads os-release, so doing it on every refresh is a shell call per container
+        // for a value that only changes when the container is replaced.
+        started.forEach { name ->
             viewModelScope.launch(Dispatchers.IO) {
-                ContainerOSInfoManager.prefetchDistroIcon(container.name, getApplication())
+                ContainerOSInfoManager.prefetchDistroIcon(name, getApplication())
             }
         }
 
-        // Proactive user fetch for running containers
-        result.filter { it.isRunning }.forEach { container ->
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.droidspaces.app.util.ContainerUsersManager.getUsers(container.name)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to prime user cache for ${container.name}")
+        // Prime the user list once per process. The manager caches misses, so the
+        // null check keeps cached containers off the root shell entirely.
+        result.asSequence()
+            .filter { it.isRunning && ContainerUsersManager.getCachedUsers(it.name) == null }
+            .forEach { container ->
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        ContainerUsersManager.getUsers(container.name)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to prime user cache for ${container.name}")
+                    }
                 }
             }
-        }
     }
 
     /** The backend's scan, then a fresh list. The indicator is for the user's own pull. */
     suspend fun scan(showIndicator: Boolean) {
+        val generation = if (showIndicator) ++refreshGeneration else refreshGeneration
         if (showIndicator) isRefreshing = true
         try {
             withContext(Dispatchers.IO) {
@@ -136,10 +160,12 @@ class ContainerViewModel(application: Application) : AndroidViewModel(applicatio
                 val result = ContainerManager.listContainers()
                 withContext(Dispatchers.Main) { updateState(result) }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Scan failed", e)
         } finally {
-            if (showIndicator) isRefreshing = false
+            if (showIndicator && generation == refreshGeneration) isRefreshing = false
         }
     }
 

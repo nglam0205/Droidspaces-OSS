@@ -106,13 +106,6 @@ jobs:
 
           echo "Keystore decoded successfully."
 
-      - name: Generate Contributors
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python3 scripts/generate_contributors.py
-
       - name: Build Signed Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}

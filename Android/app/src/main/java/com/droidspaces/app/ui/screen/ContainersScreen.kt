@@ -347,14 +347,13 @@ fun ContainersScreen(
 
         // Log viewer dialog - console stays open, user must close manually
         opsViewModel.showLogViewerFor?.let { containerName ->
-            // Load logs from memory first, fallback to cache if empty
-            val memoryLogs = opsViewModel.containerLogs[containerName]?.toList() ?: emptyList()
-            val cachedLogs = if (memoryLogs.isEmpty()) {
-                prefsManager.loadContainerLogs(containerName)
-            } else {
-                emptyList()
-            }
-            val logs = memoryLogs.ifEmpty { cachedLogs }
+            // Live buffer when an operation is streaming, else the last saved one.
+            // No toList() here: the copy was remade on every recomposition the log
+            // dialog saw, and TerminalConsole reads the snapshot list directly.
+            val memoryLogs = opsViewModel.containerLogs[containerName]
+            val cachedLogs = remember(containerName) { prefsManager.loadContainerLogs(containerName) }
+            // A buffer, even an empty one, wins: Clear left it that way on purpose.
+            val logs: List<Pair<Int, String>> = memoryLogs ?: cachedLogs
             val isBlocking = opsViewModel.runningOperationContainer == containerName // Blocking when operation is running
             TerminalDialog(
                 title = context.getString(R.string.logs_title, containerName),

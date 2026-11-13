@@ -9,8 +9,9 @@ import kotlinx.coroutines.withContext
  * Uses in-memory caching for fast access.
  */
 object ContainerUsersManager {
-    // In-memory cache for users (container name -> List of users)
-    private val cache = mutableMapOf<String, List<String>>()
+    // In-memory cache for users (container name -> List of users). Read from the UI
+    // thread and written from the IO probes, so a plain HashMap could lose writes.
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
 
     /**
      * Get list of users from container's /etc/passwd.

@@ -27,12 +27,10 @@ import com.droidspaces.app.util.AnsiColorParser
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-private val ShimmerColorShades
-    @Composable get() = listOf(
-        androidx.compose.ui.graphics.Color.Transparent,
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
-        androidx.compose.ui.graphics.Color.Transparent
-    )
+// Constant patterns, compiled once. Building them inside the item loop made the
+// console recompile the same two regexes for every line on every pass.
+private val BinaryPathPattern = Regex("/data/local/Droidspaces/bin/droidspaces")
+private val LeadingSpacesPattern = Regex("^ +")
 
 @Composable
 fun ShimmerAnimation(
@@ -60,8 +58,14 @@ fun ShimmerAnimation(
         label = "shimmerAlpha"
     )
 
+    // One list per frame instead of a composable getter that allocated a list and
+    // then a copy of it on every animated frame.
     val brush = Brush.linearGradient(
-        colors = ShimmerColorShades.map { it.copy(alpha = it.alpha * shimmerAlpha) },
+        colors = listOf(
+            Color.Transparent,
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f * shimmerAlpha),
+            Color.Transparent
+        ),
         start = Offset(10f, 10f),
         end = Offset(translateAnim, translateAnim)
     )
@@ -199,14 +203,13 @@ fun TerminalConsole(
     val defaultTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
     val errorColor = MaterialTheme.colorScheme.error.copy(alpha = 0.9f)
     val warnColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f)
+    val monoStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMono)
 
     ShimmerAnimation(
         modifier = modifier,
         enabled = isProcessing
     ) {
-        androidx.compose.material3.ProvideTextStyle(
-            MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMono)
-        ) {
+        androidx.compose.material3.ProvideTextStyle(monoStyle) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -218,44 +221,37 @@ fun TerminalConsole(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     logs.forEach { (level, message) ->
-                        val annotatedText = remember(message) {
-                            val processedMessage = message.replace(
-                                Regex("""/data/local/Droidspaces/bin/droidspaces"""),
-                                "droidspaces"
-                            )
+                        val lineColor = when (level) {
+                            Log.ERROR -> errorColor
+                            Log.WARN -> warnColor
+                            else -> defaultTextColor
+                        }
+                        // Keyed on the colour too, so a theme switch does not leave
+                        // the old palette cached for every unchanged line.
+                        val annotatedText = remember(message, lineColor) {
+                            val processedMessage = message.replace(BinaryPathPattern, "droidspaces")
 
                             val displayMessage = if (processedMessage.isEmpty()) {
                                 "\u00A0"
                             } else {
-                                processedMessage.replace(Regex("""^( +)""")) { match: kotlin.text.MatchResult ->
+                                processedMessage.replace(LeadingSpacesPattern) { match: kotlin.text.MatchResult ->
                                     match.value.replace(" ", "\u00A0")
                                 }
                             }
 
                             if (displayMessage.contains("\u001B[")) {
-                                val defaultColor = when (level) {
-                                    Log.ERROR -> errorColor
-                                    Log.WARN -> warnColor
-                                    else -> defaultTextColor
-                                }
-                                AnsiColorParser.parseAnsi(displayMessage, defaultColor)
+                                AnsiColorParser.parseAnsi(displayMessage, lineColor)
                             } else {
                                 androidx.compose.ui.text.AnnotatedString(
                                     text = displayMessage,
-                                    spanStyle = androidx.compose.ui.text.SpanStyle(
-                                        color = when (level) {
-                                            Log.ERROR -> errorColor
-                                            Log.WARN -> warnColor
-                                            else -> defaultTextColor
-                                        }
-                                    )
+                                    spanStyle = androidx.compose.ui.text.SpanStyle(color = lineColor)
                                 )
                             }
                         }
 
                         Text(
                             text = annotatedText,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMono),
+                            style = monoStyle,
                             softWrap = false,
                             modifier = Modifier
                                 .wrapContentWidth()
