@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import androidx.compose.ui.window.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -278,35 +280,33 @@ fun ContainerTerminalScreen(
     }
 
     Scaffold(
-topBar = {
-    Column {
+        topBar = {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { exitScreen() }) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back"
                 )
             }
 
-            Text(
-                text = containerName,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            Spacer(modifier = Modifier.weight(1f))
 
             IconButton(onClick = { pickUserOrOpenRoot() }) {
                 Icon(
-                    Icons.Default.Add,
-                    contentDescription = "New tab"
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "New terminal session"
                 )
             }
         }
@@ -318,31 +318,28 @@ topBar = {
                 contentColor = MaterialTheme.colorScheme.primary,
                 edgePadding = 8.dp,
                 divider = {},
-                modifier = Modifier.height(48.dp)
+                modifier = Modifier.height(40.dp)
             ) {
                 tabs.forEach { tab ->
                     val isSelected = tab.id == activeTabId
+
                     Tab(
                         selected = isSelected,
                         onClick = { activeTabId = tab.id },
-                        modifier = Modifier.height(48.dp)
+                        modifier = Modifier.height(40.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 8.dp)
+                            modifier = Modifier.padding(start = 8.dp, end = 4.dp)
                         ) {
                             Text(
                                 text = tab.user,
                                 style = MaterialTheme.typography.labelMedium,
-                                fontWeight = if (isSelected) {
-                                    FontWeight.SemiBold
-                                } else {
-                                    FontWeight.Normal
-                                },
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.widthIn(max = 96.dp)
+                                modifier = Modifier.widthIn(max = 80.dp)
                             )
 
                             IconButton(
@@ -356,14 +353,9 @@ topBar = {
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Close tab",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = if (isSelected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close terminal session",
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
@@ -377,7 +369,7 @@ topBar = {
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
         )
     }
-}
+        }
     ) { paddingValues ->
         Box(
             modifier = Modifier
