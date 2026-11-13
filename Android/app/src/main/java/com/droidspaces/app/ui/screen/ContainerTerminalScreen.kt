@@ -549,7 +549,7 @@ private fun TerminalTabView(
                     .fillMaxWidth()
                     .background(virtualKeysBackground)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-                    .height(64.dp)
+                    .height(80.dp)
             )
         }
     }
