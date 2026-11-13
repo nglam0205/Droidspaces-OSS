@@ -39,8 +39,8 @@ fun StatusPill(
     Surface(
         modifier = modifier,
         color = color.copy(alpha = 0.1f),
-        shape = RoundedCornerShape(4.dp),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.28f))
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.2f))
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

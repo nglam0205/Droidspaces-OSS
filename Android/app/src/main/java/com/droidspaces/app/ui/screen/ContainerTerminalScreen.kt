@@ -284,93 +284,97 @@ fun ContainerTerminalScreen(
 
     Scaffold(
     topBar = {
-        Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Column(
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .windowInsetsPadding(WindowInsets.statusBars)
+        ) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .height(40.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                IconButton(
+                    onClick = { exitScreen() },
+                    modifier = Modifier.size(40.dp)
                 ) {
-                    IconButton(onClick = { exitScreen() }, modifier = Modifier.size(44.dp)) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = context.getString(R.string.back)
-                        )
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "TERMINAL",
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = com.droidspaces.app.ui.theme.JetBrainsMono),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = containerName,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    IconButton(onClick = { pickUserOrOpenRoot() }, modifier = Modifier.size(44.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "New session",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back"
+                    )
                 }
 
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     tabs.forEach { tab ->
                         val selected = tab.id == activeTabId
+
                         Surface(
                             onClick = { activeTabId = tab.id },
-                            modifier = Modifier.height(30.dp),
-                            shape = RoundedCornerShape(6.dp),
-                            color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                            else Color.Transparent,
+                            modifier = Modifier
+                                .height(36.dp)
+                                .width(if (selected) 144.dp else 80.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
                             tonalElevation = 0.dp,
                             border = BorderStroke(
                                 1.dp,
-                                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                if (selected) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                } else {
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                                }
                             )
                         ) {
                             Row(
-                                modifier = Modifier.padding(start = 10.dp, end = if (selected) 2.dp else 10.dp),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(
+                                        start = 10.dp,
+                                        end = if (selected) 4.dp else 10.dp
+                                    ),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     text = tab.user,
-                                    style = MaterialTheme.typography.labelMedium.copy(fontFamily = com.droidspaces.app.ui.theme.JetBrainsMono),
-                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
+
                                 if (selected) {
                                     IconButton(
                                         onClick = {
-                                            if (confirmTabClose) tabPendingClose = tab else closeTab(tab)
+                                            if (confirmTabClose) {
+                                                tabPendingClose = tab
+                                            } else {
+                                                closeTab(tab)
+                                            }
                                         },
-                                        modifier = Modifier.size(26.dp)
+                                        modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Close,
                                             contentDescription = "Close session",
-                                            modifier = Modifier.size(13.dp),
-                                            tint = MaterialTheme.colorScheme.primary
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
                                         )
                                     }
                                 }
@@ -378,7 +382,16 @@ fun ContainerTerminalScreen(
                         }
                     }
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+
+                IconButton(
+                    onClick = { pickUserOrOpenRoot() },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "New session"
+                    )
+                }
             }
         }
     }
@@ -393,10 +406,7 @@ fun ContainerTerminalScreen(
             )
     ) {
         if (binder == null || tabs.isEmpty()) {
-            com.droidspaces.app.ui.design.DsLoadingState(
-                modifier = Modifier.fillMaxSize(),
-                label = "Attaching session"
-            )
+            FullScreenLoading(size = LoadingSize.Medium)
         } else {
             tabs.forEach { tab ->
                 key(tab.id) {
@@ -629,8 +639,8 @@ private fun KeyboardToggleButton(
 
     Surface(
         onClick = { onToggle(imeVisible) },
-        modifier = modifier.size(52.dp),
-        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.size(56.dp),
+        shape = RoundedCornerShape(16.dp),
         // Slightly transparent so it never fully hides a line of output under it
         color = fill.copy(alpha = 0.9f),
         border = BorderStroke(1.dp, edge),

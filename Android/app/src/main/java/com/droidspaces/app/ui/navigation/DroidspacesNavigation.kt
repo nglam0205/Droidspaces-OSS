@@ -197,7 +197,7 @@ fun DroidspacesNavigation(
                 }
                 shortcut == "containers" || shortcut == "panel" -> {
                     requestedTab =
-                        if (shortcut == "containers") TabItem.Containers else TabItem.Monitor
+                        if (shortcut == "containers") TabItem.Containers else TabItem.ControlPanel
                     navController.navigate(Screen.Home.createRoute()) {
                         popUpTo(Screen.Home.route) { inclusive = false }
                         launchSingleTop = true
@@ -208,22 +208,12 @@ fun DroidspacesNavigation(
         onShortcutHandled()
     }
 
-    // A short rise in the direction of travel, never a full-screen slide: the
-    // outgoing page stays put and fades, so going back reads as reversing the
-    // move rather than replaying it.
+    // The NavHost default: a 200 ms fade both ways. Pop transitions follow these too.
     val defaultEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        slideInHorizontally(animationSpec = AnimationUtils.mediumSpec()) { it / 12 } +
-            fadeIn(animationSpec = AnimationUtils.fastSpec())
+        fadeIn(animationSpec = AnimationUtils.fastSpec())
     }
     val defaultExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
         fadeOut(animationSpec = AnimationUtils.fastSpec())
-    }
-    val defaultPopEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        fadeIn(animationSpec = AnimationUtils.fastSpec())
-    }
-    val defaultPopExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        slideOutHorizontally(animationSpec = AnimationUtils.mediumSpec()) { it / 12 } +
-            fadeOut(animationSpec = AnimationUtils.fastSpec())
     }
 
     val setupEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
@@ -249,9 +239,7 @@ fun DroidspacesNavigation(
         navController = navController,
         startDestination = initialDestination,
         enterTransition = defaultEnterTransition,
-        exitTransition = defaultExitTransition,
-        popEnterTransition = defaultPopEnterTransition,
-        popExitTransition = defaultPopExitTransition
+        exitTransition = defaultExitTransition
     ) {
         composable(
             route = Screen.Welcome.route,
@@ -350,15 +338,6 @@ fun DroidspacesNavigation(
                 },
                 onNavigateToTerminal = { containerName ->
                     navController.navigate(Screen.Terminal.createRoute(containerName))
-                },
-                onNavigateToRequirements = {
-                    navController.navigate(Screen.Requirements.route)
-                },
-                onNavigateToAutoBootPriority = {
-                    navController.navigate(Screen.AutoBootPriority.route)
-                },
-                onNavigateToTerminalAppearance = {
-                    navController.navigate(Screen.TerminalAppearance.route)
                 }
             )
         }

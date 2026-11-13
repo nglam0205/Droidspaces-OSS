@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -13,7 +12,6 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 
 /**
  * Blend two colors by the given ratio.
@@ -175,7 +173,7 @@ fun DroidspacesTheme(
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     amoledMode: Boolean = false,
-    themePalette: ThemePalette = ThemePalette.GRAPHITE,
+    themePalette: ThemePalette = ThemePalette.BROCCOLI,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -219,16 +217,6 @@ fun DroidspacesTheme(
         colorScheme = colorScheme,
         motionScheme = MotionScheme.expressive(),
         typography = Typography,
-        // Panels are close to rectangular, controls a little rounder, dialogs and
-        // sheets rounded enough to read as a separate layer. The old 20/24dp
-        // everything default made every surface look like the same bubble.
-        shapes = Shapes(
-            extraSmall = RoundedCornerShape(4.dp),
-            small = RoundedCornerShape(8.dp),
-            medium = RoundedCornerShape(12.dp),
-            large = RoundedCornerShape(16.dp),
-            extraLarge = RoundedCornerShape(12.dp)
-        ),
         content = content
     )
 }

@@ -1,83 +1,58 @@
 package com.droidspaces.app.ui.screen
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.DesktopWindows
-import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
-import com.droidspaces.app.R
-import com.droidspaces.app.service.TerminalSessionService
+import androidx.compose.ui.unit.sp
 import com.droidspaces.app.ui.component.ContainerUsersCard
 import com.droidspaces.app.ui.component.DsSnackbarHost
-import com.droidspaces.app.ui.design.DsActionButton
-import com.droidspaces.app.ui.design.DsBadge
-import com.droidspaces.app.ui.design.DsButtonStyle
-import com.droidspaces.app.ui.design.DsCard
-import com.droidspaces.app.ui.design.DsDivider
-import com.droidspaces.app.ui.design.DsIconAction
-import com.droidspaces.app.ui.design.DsKeyValueRow
-import com.droidspaces.app.ui.design.DsPageHeader
-import com.droidspaces.app.ui.design.DsSectionHeader
-import com.droidspaces.app.ui.design.DsSpace
-import com.droidspaces.app.ui.design.DsLoadingState
-import com.droidspaces.app.ui.theme.JetBrainsMono
-import com.droidspaces.app.ui.util.showError
-import com.droidspaces.app.util.AnlandUtils
-import com.droidspaces.app.util.ContainerDiskUsageManager
 import com.droidspaces.app.util.ContainerInfo
-import com.droidspaces.app.util.ContainerOSInfoManager
-import com.droidspaces.app.util.ContainerUsersManager
-import com.droidspaces.app.util.IconUtils
 import com.droidspaces.app.util.ResourceLimits
+import com.droidspaces.app.util.ContainerOSInfoManager
+import com.droidspaces.app.util.ContainerDiskUsageManager
+import com.droidspaces.app.util.ContainerUsersManager
+import com.droidspaces.app.util.AnlandUtils
 import com.droidspaces.app.util.TermuxX11Utils
+import com.droidspaces.app.ui.util.showError
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.droidspaces.app.util.AnimationUtils
+import com.droidspaces.app.util.IconUtils
+import com.droidspaces.app.ui.util.LoadingIndicator
+import com.droidspaces.app.ui.util.LoadingSize
+import androidx.compose.ui.platform.LocalContext
+import com.droidspaces.app.R
+import com.droidspaces.app.service.TerminalSessionService
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import com.droidspaces.app.ui.component.CardButton
+import com.droidspaces.app.ui.component.DetailCard
 
 /**
- * One container. Identity and live readings first, then the things that can be
- * opened from here: a terminal, a display, the users, and the init system.
- * The page polls only while it is visible, and leaves on its own when the
- * container disappears from the backend.
+ * One container's identity grid and its cards. The LazyColumn keys are stable and
+ * the cards keep a minimum height, so a refresh never shifts the layout.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContainerDetailsScreen(
     container: ContainerInfo,
@@ -89,15 +64,24 @@ fun ContainerDetailsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // Pre-load cached OS info for instant display - zero delay
+    // Uses persistent cache that survives app restarts
     var osInfo by remember {
         mutableStateOf(ContainerOSInfoManager.getCachedOSInfo(container.name, context))
     }
+
+    // Init system state - detect systemd first, then OpenWrt/procd, then OpenRC
     var initSystemState by remember { mutableStateOf<InitSystemCardState>(InitSystemCardState.Checking) }
+
+    // Disk usage of the sparse rootfs.img (only relevant for sparse-image containers).
+    // Seed from the in-memory cache so a re-opened screen paints instantly.
     var diskUsage by remember {
         mutableStateOf(
             if (container.useSparseImage) ContainerDiskUsageManager.getCached(container.rootfsPath) else null
         )
     }
+
+    // Seeded from the cache; null keeps the users card on its loader until the probe answers
     var users by remember { mutableStateOf(ContainerUsersManager.getCachedUsers(container.name)) }
 
     LaunchedEffect(container.name) {
@@ -112,160 +96,145 @@ fun ContainerDetailsScreen(
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Auto-refresh loop - refreshes both container info and uptime every 2s
+    // Only updates UI if data actually changed (prevents unnecessary recompositions)
+    // Uses repeatOnLifecycle to pause polling when the app is in background
+    LaunchedEffect(container.name) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                try {
+                    // Missing from `show` means the container died; navigate back
+                    val newOSInfo = ContainerOSInfoManager.fetchAll(context)[container.name]
+                    if (newOSInfo == null) {
+                        // Kill all terminal sessions for this container
+                        context.startService(
+                            android.content.Intent(context, TerminalSessionService::class.java).apply {
+                                action = TerminalSessionService.ACTION_STOP_CONTAINER_SESSIONS
+                                putExtra(TerminalSessionService.EXTRA_CONTAINER_NAME, container.name)
+                            }
+                        )
+                        onNavigateBack()
+                        break
+                    }
+
+                    if (osInfo != newOSInfo) osInfo = newOSInfo
+                } catch (e: Exception) {
+                    // Silently ignore refresh errors to keep the UI smooth
+                }
+                delay(2000)
+            }
+        }
+    }
+
+    // Disk-usage footprint - computed once when the screen opens (the sparse image's
+    // footprint changes slowly, so a snapshot is enough). Runs in its own effect so the
+    // first reading isn't blocked behind the heavier OS-info shell calls above.
     if (container.useSparseImage) {
         LaunchedEffect(container.name) {
             ContainerDiskUsageManager.getUsage(container.rootfsPath)?.let { diskUsage = it }
         }
     }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(container.name) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                val fresh = ContainerOSInfoManager.fetchAll(context)[container.name]
-                if (fresh == null) {
-                    context.startService(
-                        android.content.Intent(context, TerminalSessionService::class.java).apply {
-                            action = TerminalSessionService.ACTION_STOP_CONTAINER_SESSIONS
-                            putExtra(TerminalSessionService.EXTRA_CONTAINER_NAME, container.name)
-                        }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = container.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
-                    onNavigateBack()
-                    break
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = LocalContext.current.getString(R.string.back)
+                        )
+                    }
                 }
-                if (fresh != osInfo) osInfo = fresh
-                delay(2000)
-            }
-        }
-    }
-
-    val running = container.isRunning
-    val distro = osInfo?.prettyName ?: osInfo?.name ?: "linux"
-    val statusColor = if (running) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        DsPageHeader(
-            title = container.name,
-            eyebrow = distro,
-            subtitle = buildString {
-                append(if (running) "running" else "stopped")
-                container.pid?.let { append(" · pid $it") }
-                append(" · ${container.netMode}")
-            },
-            onBack = onNavigateBack,
-            actions = {
-                if (running) {
-                    DsIconAction(
-                        icon = Icons.Default.Terminal,
-                        contentDescription = context.getString(R.string.terminal),
-                        onClick = onNavigateToTerminal
-                    )
-                }
-            }
-        )
-
+            )
+        },
+        snackbarHost = { DsSnackbarHost(snackbarHostState) }
+    ) { padding ->
         LazyColumn(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            contentPadding = PaddingValues(
-                start = DsSpace.lg,
-                end = DsSpace.lg,
-                bottom = DsSpace.huge
-            ),
-            verticalArrangement = Arrangement.spacedBy(DsSpace.md)
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item(key = "identity") {
-                DsCard(accent = statusColor) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            painter = IconUtils.getDistroIcon(distro),
-                            contentDescription = null,
-                            tint = statusColor,
-                            modifier = Modifier.size(34.dp)
-                        )
-                        Spacer(Modifier.width(DsSpace.md))
-                        Column(modifier = Modifier.weight(1f)) {
+            // OS Information - Total Rewrite (Zero Shadow / Flat Design)
+            item(key = "os_info_flat_grid_${container.name}") {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Header Row
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                             Text(
-                                text = osInfo?.hostname ?: container.hostname.ifEmpty { container.name },
-                                style = MaterialTheme.typography.titleLarge,
+                                text = context.getString(R.string.container_info),
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                color = MaterialTheme.colorScheme.onSurface
                             )
+                        }
+
+                        osInfo?.let { info ->
+                            // Dynamic Height Synced Grid - measure all 6 and find max.
+                            // Built once per (osInfo, running) instead of every recomposition
+                            // (this block re-fires on the 2s OS-info poll).
+                            val tokens = remember(info, container.isRunning) { mutableListOf<@Composable () -> Unit>().apply {
+                                add { IdentityToken(context.getString(R.string.distribution), info.prettyName ?: info.name ?: "Linux", IconUtils.getDistroIcon(info.prettyName ?: info.name), MaterialTheme.colorScheme.primary) }
+                                add { IdentityToken(context.getString(R.string.hostname), info.hostname ?: "localhost", rememberVectorPainter(image = Icons.Default.Computer), MaterialTheme.colorScheme.secondary) }
+                                add { IdentityToken(context.getString(R.string.uptime), info.uptime ?: "0s", rememberVectorPainter(image = Icons.Default.Timer), MaterialTheme.colorScheme.tertiary) }
+                                add { IdentityToken(context.getString(R.string.ip_address), info.ipAddress ?: "127.0.0.1", rememberVectorPainter(image = Icons.Default.Lan), MaterialTheme.colorScheme.outline) }
+                                if (container.isRunning) {
+                                    add { IdentityToken(context.getString(R.string.cpu_usage_label), info.cpuUsage?.let { context.getString(R.string.cpu_percent_label, it) } ?: "---", rememberVectorPainter(image = Icons.Default.Speed), MaterialTheme.colorScheme.primary) }
+                                    add { IdentityToken(context.getString(R.string.ram_usage_label), info.ramLabel(context) ?: "---", rememberVectorPainter(image = Icons.Default.Memory), MaterialTheme.colorScheme.secondary) }
+                                }
+                            } }
+
+                            SyncedGrid(items = tokens)
+                        } ?: Box(
+                            modifier = Modifier.fillMaxWidth().height(100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = if (osInfo?.version != null) "$distro ${osInfo?.version}" else distro,
-                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMono),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                text = context.getString(R.string.unable_to_read_container_info),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        DsBadge(
-                            label = if (running) context.getString(R.string.status_running) else context.getString(R.string.status_stopped),
-                            color = statusColor
-                        )
                     }
-
-                    DsDivider(Modifier.padding(vertical = DsSpace.md))
-
-                    DsKeyValueRow("Uptime", osInfo?.uptime ?: "---")
-                    DsKeyValueRow("Address", osInfo?.ipAddress ?: "---")
-                    if (running) {
-                        DsKeyValueRow("CPU", osInfo?.cpuUsage?.let { context.getString(R.string.cpu_percent_label, it) } ?: "---")
-                        DsKeyValueRow("Memory", osInfo?.ramLabel(context) ?: "---")
-                    }
-                    DsKeyValueRow("Rootfs", if (container.useSparseImage) "sparse image" else "directory")
                 }
             }
 
+            // Disk Usage Card - only for sparse-image containers (shows rootfs.img footprint)
             if (container.useSparseImage) {
-                item(key = "disk") {
-                    SparseDiskCard(usage = diskUsage)
+                item(key = "diskusage_${container.name}") {
+                    SparseDiskUsageCard(usage = diskUsage)
                 }
             }
 
-            item(key = "terminal") {
-                TerminalCard(
-                    containerName = container.name,
-                    enabled = running,
-                    onOpenTerminal = onNavigateToTerminal
-                )
-            }
-
-            val anlandSocket = osInfo?.anlandSocket
-            if (anlandSocket != null) {
-                item(key = "anland") {
-                    DisplayCard(
-                        icon = null,
-                        title = context.getString(R.string.anland_option),
-                        description = context.getString(R.string.enable_anland_description),
-                        onLaunch = {
-                            if (!AnlandUtils.launchWindow(context, container.name, anlandSocket)) {
-                                scope.showError(snackbarHostState, context.getString(R.string.anland_not_installed))
-                            }
-                        }
-                    )
-                }
-            }
-
-            if (osInfo?.x11 == true) {
-                item(key = "x11") {
-                    DisplayCard(
-                        icon = painterResource(R.drawable.ic_x11),
-                        title = context.getString(R.string.termux_x11_option),
-                        description = context.getString(R.string.launch_x11_description),
-                        onLaunch = {
-                            if (!TermuxX11Utils.launch(context)) {
-                                scope.showError(snackbarHostState, context.getString(R.string.termux_x11_not_installed))
-                            }
-                        }
-                    )
-                }
-            }
-
-            item(key = "users") {
+            item(key = "users_${container.name}") {
                 ContainerUsersCard(
                     containerName = container.name,
                     users = users,
@@ -274,215 +243,294 @@ fun ContainerDetailsScreen(
                 )
             }
 
-            item(key = "init") {
-                InitSystemCard(
+            item(key = "terminal_${container.name}") {
+                TerminalCard(
+                    containerName = container.name,
+                    onOpenTerminal = onNavigateToTerminal
+                )
+            }
+
+            osInfo?.anlandSocket?.let { socketPath ->
+                item(key = "anland_${container.name}") {
+                    DisplayAppCard(
+                        icon = rememberVectorPainter(Icons.Default.DesktopWindows),
+                        title = context.getString(R.string.anland_option),
+                        description = context.getString(R.string.enable_anland_description),
+                        onLaunch = {
+                            if (!AnlandUtils.launchWindow(context, container.name, socketPath))
+                                scope.showError(snackbarHostState, context.getString(R.string.anland_not_installed))
+                        }
+                    )
+                }
+            }
+
+            if (osInfo?.x11 == true) {
+                item(key = "x11_${container.name}") {
+                    DisplayAppCard(
+                        icon = painterResource(R.drawable.ic_x11),
+                        title = context.getString(R.string.termux_x11_option),
+                        description = context.getString(R.string.launch_x11_description),
+                        onLaunch = {
+                            if (!TermuxX11Utils.launch(context))
+                                scope.showError(snackbarHostState, context.getString(R.string.termux_x11_not_installed))
+                        }
+                    )
+                }
+            }
+
+            item(key = "systemd_${container.name}") {
+                PremiumInitSystemCard(
                     state = initSystemState,
                     onNavigateToServices = onNavigateToServices
                 )
             }
         }
     }
-
-    DsSnackbarHost(hostState = snackbarHostState)
 }
 
+/**
+ * Which init system is available in the container.
+ */
 enum class InitSystem { SYSTEMD, PROCD, OPENRC, RUNIT }
 
+/**
+ * Init system card state - sealed for type safety and stability
+ */
 private sealed class InitSystemCardState {
     data object Checking : InitSystemCardState()
     data class Available(val initSystem: InitSystem) : InitSystemCardState()
     data object NotAvailable : InitSystemCardState()
 }
 
+/**
+ * Info row with optimized layout - no unnecessary recompositions
+ */
 @Composable
-private fun TerminalCard(
-    containerName: String,
-    enabled: Boolean,
-    onOpenTerminal: () -> Unit
+private fun IdentityToken(
+    label: String,
+    value: String,
+    painter: androidx.compose.ui.graphics.painter.Painter,
+    containerColor: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val sessionCount by remember {
-        derivedStateOf { TerminalSessionService.globalSessionList.values.count { it.containerName == containerName } }
-    }
-    DsCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Default.Terminal,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(DsSpace.md))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = context.getString(R.string.terminal),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+    Surface(
+        modifier = modifier
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = containerColor.copy(alpha = 0.08f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, containerColor.copy(alpha = 0.15f))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Header Row (Top-Center)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp)
+            ) {
+                Icon(
+                    painter = painter,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = containerColor
                 )
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = when {
-                        !enabled -> "Start the container to open a shell"
-                        sessionCount == 0 -> context.getString(R.string.terminal_card_desc)
-                        sessionCount == 1 -> context.getString(R.string.session_running_singular)
-                        else -> context.getString(R.string.sessions_running_plural, sessionCount)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = label.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = containerColor,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1
                 )
             }
-            DsActionButton(
-                label = context.getString(if (sessionCount > 0) R.string.restore else R.string.open),
-                onClick = onOpenTerminal,
-                enabled = enabled,
-                icon = Icons.Default.Terminal,
-                style = if (sessionCount > 0) DsButtonStyle.Filled else DsButtonStyle.Tonal
+
+            // Value Text (Middle-Center)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 3,
+                minLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Visible,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
             )
         }
     }
 }
 
 @Composable
-private fun SparseDiskCard(usage: ContainerDiskUsageManager.DiskUsage?) {
+private fun TerminalCard(containerName: String, onOpenTerminal: () -> Unit) {
+    val context = LocalContext.current
+    val sessionCount by remember {
+        derivedStateOf { TerminalSessionService.globalSessionList.values.count { it.containerName == containerName } }
+    }
+    DetailCard(
+        icon = rememberVectorPainter(Icons.Default.Terminal),
+        title = context.getString(R.string.terminal),
+        description = when (sessionCount) {
+            0 -> context.getString(R.string.terminal_card_desc)
+            1 -> context.getString(R.string.session_running_singular)
+            else -> context.getString(R.string.sessions_running_plural, sessionCount)
+        },
+        action = {
+            CardButton(
+                label = context.getString(if (sessionCount > 0) R.string.restore else R.string.open),
+                icon = if (sessionCount > 0) Icons.Default.Terminal else Icons.Default.ChevronRight,
+                onClick = onOpenTerminal
+            )
+        }
+    )
+}
+
+@Composable
+private fun SparseDiskUsageCard(usage: ContainerDiskUsageManager.DiskUsage?) {
     val context = LocalContext.current
     val fraction = usage?.let {
         if (it.totalBytes > 0L) (it.usedBytes.toFloat() / it.totalBytes.toFloat()).coerceIn(0f, 1f) else 0f
     } ?: 0f
-    DsCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = context.getString(R.string.disk_usage),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = usage?.let {
-                        context.getString(
-                            R.string.disk_usage_used_of_total,
-                            ResourceLimits.formatBytes(it.usedBytes),
-                            ResourceLimits.formatBytes(it.totalBytes)
-                        )
-                    } ?: context.getString(R.string.disk_usage_calculating),
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMono),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text(
-                text = "${(fraction * 100).toInt()}%",
-                style = MaterialTheme.typography.titleMedium.copy(fontFamily = JetBrainsMono),
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        Spacer(Modifier.height(DsSpace.sm))
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = AnimationUtils.mediumSpec(),
+        label = "disk_usage_progress"
+    )
+    DetailCard(
+        icon = painterResource(R.drawable.ic_disk),
+        title = context.getString(R.string.disk_usage),
+        description = usage?.let {
+            context.getString(R.string.disk_usage_used_of_total, ResourceLimits.formatBytes(it.usedBytes), ResourceLimits.formatBytes(it.totalBytes))
+        } ?: context.getString(R.string.disk_usage_calculating),
+    ) {
         LinearProgressIndicator(
-            progress = { fraction },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            progress = { animatedFraction },
+            modifier = Modifier.fillMaxWidth().height(8.dp),
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            strokeCap = StrokeCap.Round
         )
     }
 }
 
 @Composable
-private fun DisplayCard(
-    icon: Painter?,
-    title: String,
-    description: String,
-    onLaunch: () -> Unit
-) {
+private fun PremiumInitSystemCard(state: InitSystemCardState, onNavigateToServices: (InitSystem) -> Unit) {
     val context = LocalContext.current
-    DsCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) {
-                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
-            } else {
-                Icon(Icons.Default.DesktopWindows, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
+    val available = state is InitSystemCardState.Available
+    DetailCard(
+        icon = rememberVectorPainter(
+            when (state) {
+                is InitSystemCardState.Available -> Icons.Default.Settings
+                is InitSystemCardState.NotAvailable -> Icons.Default.Block
+                is InitSystemCardState.Checking -> Icons.Default.HourglassEmpty
             }
-            Spacer(Modifier.width(DsSpace.md))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        ),
+        title = when (state) {
+            is InitSystemCardState.Available -> when (state.initSystem) {
+                InitSystem.SYSTEMD -> context.getString(R.string.systemd)
+                InitSystem.PROCD -> context.getString(R.string.openwrt)
+                InitSystem.OPENRC -> context.getString(R.string.openrc)
+                InitSystem.RUNIT -> context.getString(R.string.runit)
             }
-            DsActionButton(
-                label = context.getString(R.string.launch_anland_window),
-                onClick = onLaunch,
-                icon = Icons.Default.DesktopWindows,
-                style = DsButtonStyle.Tonal
-            )
+            else -> context.getString(R.string.init_system)
+        },
+        color = if (available) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f),
+        iconTint = if (available) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        action = {
+            Crossfade(
+                targetState = state,
+                animationSpec = AnimationUtils.mediumSpec(),
+                label = "initsystem_button_transition"
+            ) { currentState ->
+                when (currentState) {
+                    is InitSystemCardState.Checking -> {
+                        FilledTonalButton(
+                            onClick = {},
+                            enabled = false,
+                            modifier = Modifier.widthIn(min = 140.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                LoadingIndicator(size = LoadingSize.Small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(context.getString(R.string.checking))
+                            }
+                        }
+                    }
+                    is InitSystemCardState.NotAvailable -> {
+                        FilledTonalButton(
+                            onClick = {},
+                            enabled = false,
+                            modifier = Modifier.widthIn(min = 140.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                disabledContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                                disabledContentColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        ) {
+                            Text(context.getString(R.string.not_available))
+                        }
+                    }
+                    is InitSystemCardState.Available -> CardButton(context.getString(R.string.manage)) { onNavigateToServices(currentState.initSystem) }
+                }
+            }
         }
-    }
+    )
 }
 
 @Composable
-private fun InitSystemCard(
-    state: InitSystemCardState,
-    onNavigateToServices: (InitSystem) -> Unit
-) {
+private fun DisplayAppCard(icon: Painter, title: String, description: String, onLaunch: () -> Unit) {
     val context = LocalContext.current
-    val available = state is InitSystemCardState.Available
-    DsCard(accent = if (available) MaterialTheme.colorScheme.primary else null) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = when (state) {
-                    is InitSystemCardState.Available -> Icons.Default.Settings
-                    is InitSystemCardState.NotAvailable -> Icons.Default.Block
-                    is InitSystemCardState.Checking -> Icons.Default.HourglassEmpty
-                },
-                contentDescription = null,
-                tint = if (available) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(DsSpace.md))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = when (state) {
-                        is InitSystemCardState.Available -> when (state.initSystem) {
-                            InitSystem.SYSTEMD -> context.getString(R.string.systemd)
-                            InitSystem.PROCD -> context.getString(R.string.openwrt)
-                            InitSystem.OPENRC -> context.getString(R.string.openrc)
-                            InitSystem.RUNIT -> context.getString(R.string.runit)
-                        }
-                        else -> context.getString(R.string.init_system)
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = when (state) {
-                        is InitSystemCardState.Available -> "Service manager detected"
-                        is InitSystemCardState.NotAvailable -> context.getString(R.string.not_available)
-                        is InitSystemCardState.Checking -> context.getString(R.string.checking)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            when (state) {
-                is InitSystemCardState.Available -> DsActionButton(
-                    label = context.getString(R.string.manage),
-                    onClick = { onNavigateToServices(state.initSystem) },
-                    style = DsButtonStyle.Filled
-                )
-                is InitSystemCardState.Checking -> DsLoadingState(modifier = Modifier.size(32.dp))
-                is InitSystemCardState.NotAvailable -> Text(
-                    text = "---",
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMono),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+    DetailCard(icon = icon, title = title, description = description, action = {
+        CardButton(context.getString(R.string.launch_anland_window), onClick = onLaunch)
+    })
+}
+
+/**
+ * Dynamic Height Synced Grid - measures all items and applies max height to all.
+ */
+@Composable
+private fun SyncedGrid(
+    items: List<@Composable () -> Unit>,
+    modifier: Modifier = Modifier
+) {
+    androidx.compose.ui.layout.SubcomposeLayout(modifier = modifier.fillMaxWidth()) { constraints ->
+        val gutter = 12.dp.roundToPx()
+        val itemWidth = (constraints.maxWidth - gutter) / 2
+        val itemConstraints = constraints.copy(minWidth = itemWidth, maxWidth = itemWidth, minHeight = 0)
+        
+        // Pass 1: Measure to find the maximum height needed
+        val maxMeasuredHeight = subcompose("measurer") {
+            items.forEach { it() }
+        }.map { it.measure(itemConstraints) }.maxOfOrNull { it.height } ?: 0
+        
+        // Pass 2: Actually layout with the forced uniform height
+        val finalPlaceables = subcompose("content") {
+            items.forEach { it() }
+        }.map { 
+            it.measure(itemConstraints.copy(minHeight = maxMeasuredHeight, maxHeight = maxMeasuredHeight)) 
+        }
+        
+        val rowCount = (items.size + 1) / 2
+        val totalHeight = rowCount * maxMeasuredHeight + (rowCount - 1) * gutter
+        
+        layout(constraints.maxWidth, totalHeight) {
+            finalPlaceables.forEachIndexed { index, placeable ->
+                val row = index / 2
+                val col = index % 2
+                val x = if (col == 0) 0 else constraints.maxWidth - placeable.width
+                val y = row * (maxMeasuredHeight + gutter)
+                placeable.placeRelative(x, y)
             }
         }
     }

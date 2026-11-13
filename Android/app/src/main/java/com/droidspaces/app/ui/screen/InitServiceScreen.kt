@@ -369,7 +369,7 @@ private fun InitServiceCard(
 
     Surface(
         modifier = Modifier.fillMaxWidth().animateContentSize(AnimationUtils.mediumSpec()),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {

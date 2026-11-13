@@ -66,11 +66,9 @@ class PreferencesManager private constructor(context: Context) {
 
     var amoledMode: Boolean by pref(KEY_AMOLED_MODE, false)
 
-    // The app's own Graphite scheme is the default. Dynamic colour stays one tap
-    // away for users who want the wallpaper to drive the interface.
-    var useDynamicColor: Boolean by pref(KEY_USE_DYNAMIC_COLOR, false)
+    var useDynamicColor: Boolean by pref(KEY_USE_DYNAMIC_COLOR, true)
 
-    var themePalette: String by pref(KEY_THEME_PALETTE, "GRAPHITE")
+    var themePalette: String by pref(KEY_THEME_PALETTE, "BROCCOLI")
 
     // Terminal-only dark mode - independent of the app-wide theme, so the rest
     // of the app can stay light while the terminal page renders dark.

@@ -118,7 +118,7 @@ fun JournaldScreen(
 private fun JournaldContent(logs: List<String>) {
     Surface(
         modifier = Modifier.fillMaxSize().padding(16.dp),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         tonalElevation = 0.dp

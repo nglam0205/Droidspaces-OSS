@@ -111,7 +111,7 @@ fun DsDialog(
                     // detector rather than clickable keeps TalkBack from announcing the dialog as
                     // a button.
                     .pointerInput(Unit) { detectTapGestures { clearFocus() } },
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 border = BorderStroke(1.dp, borderColor),
                 tonalElevation = 0.dp

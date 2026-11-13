@@ -5,7 +5,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 
 /**
  * The heading that groups the cards under it. Four screens had grown their own
@@ -18,10 +17,9 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
-        letterSpacing = 1.4.sp,
         color = MaterialTheme.colorScheme.primary,
         modifier = modifier
     )

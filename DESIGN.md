@@ -1,215 +1,443 @@
 # DESIGN.md
 
-The visual language of the Droidspaces Android app. The C backend has no UI, so none of this
-applies to `src/`.
+The visual language of the Droidspaces Android app. Every value here was read out of
+`Android/app/src/main/java/com/droidspaces/app/`, not invented for this document. Where the app
+disagreed with itself, the value most of the app already uses won.
 
-The app was rebuilt around one idea: it is a workstation console that happens to run on a phone.
-Dense, quiet, and legible at a glance, with a single signal colour reserved for state and action.
-The old flat-bubble language, 20dp cards, and all-mono type are gone. This document describes
-what replaced it, and the tokens that enforce it.
+The C backend has no UI, so none of this applies to `src/`.
 
 ## How to use this file
 
-**Components and tokens come first, values second.** Shared pieces live in:
+**Components come first, values second.** The Reuse Inventory in
+[CONTRIBUTING.md](./CONTRIBUTING.md) lists what already exists. Go there first. A card is
+`SettingsCard`, a dialog footer is `DialogFooterRow`, a status chip is `StatusPill`, an empty
+list is `EmptyState`. If one of those fits, use it and stop reading here.
 
-- `ui/design/DsTokens.kt`: spacing, radii, sizes, motion, and the compact/wide breakpoints.
-- `ui/design/DsComponents.kt`: `DsPageHeader`, `DsCard`, `DsSectionHeader`, `DsBadge`,
-  `DsActionButton`, `DsIconAction`, `DsKeyValueRow`, `DsMetric`, `DsSearchField`,
-  `DsFilterChip`, `DsEmptyState`, `DsLoadingState`, `DsErrorState`, `DsActionStrip`.
-- `ui/design/DsCharts.kt`: `DsRing`.
-- `ui/design/DsNav.kt`: `DsBottomDock`, `DsNavRail`, `DsDestination`.
-- `ui/theme/`: the colour schemes, typography scale, and Material shapes.
+This file is for the case where you have checked and nothing shared covers what you need. Then
+you build it out of the values below, so the new thing looks like it belongs.
 
-If a shared component fits, use it and stop reading. If nothing fits, build from the tokens here
-so the new thing belongs. Never hardcode a hex colour, a radius, or an odd spacing value.
+Never hardcode a hex colour, an sp size, or a radius you picked by eye.
 
-## Identity
+## What the app looks like, and why
 
-- Dark first. The default palette is **Graphite**: near-black neutral surfaces with a lime signal
-  colour. A light scheme exists and keeps the same hierarchy.
-- One accent that means something. Lime is used for running, primary actions, focus, and live
-  telemetry. It is not used for decoration.
-- Cool steel is the secondary, amber the tertiary and warning. Running is never a green card: the
-  card stays neutral and a 2dp top accent plus a status badge carry the state.
-- Square-ish panels, compact controls. Cards are 12dp, controls are 8dp, overlays are 16dp.
-- Mono only for machine output. Numbers, paths, unit names, addresses, logs and pids use
-  JetBrains Mono. Every label, title and paragraph uses the platform sans.
+**Flat, always.** Nothing in this app is elevated. `tonalElevation = 0.dp` appears at 55 sites
+and there is not one `CardDefaults.cardElevation` in the tree. Depth is expressed by stepping
+the surface colour up one level and drawing a 1dp border. If you reach for a shadow, you have
+left the design. The one thing that floats is the FAB menu on the Containers tab, and that is a
+decided exception below, not a precedent.
+
+**`Surface` is the primitive.** 123 `Surface` uses against a single `Card()`. Buttons are
+clickable Surfaces, not Material `Button`s. Dialogs are `Dialog { Surface { } }`, not
+`AlertDialog`. Material components are not banned, but they arrive with their own elevation and
+radius defaults and have to be argued for.
+
+**Colour is derived, never literal.** `ui/theme/Theme.kt` blends a full scheme from three
+palette colours. Dynamic colour is on by default, six fallback palettes ship for older devices
+and for users who turn it off, and AMOLED collapses every surface to black. A hardcoded
+`Color(0xFF...)` breaks all four paths at once.
+
+**Borders and tint carry state. Fills stay quiet.** A running container is not a green card. It
+is a normal card with a tinted button and an accent border. State lives in the accent, not in
+the background.
 
 ## Colour
 
-All roles come from `MaterialTheme.colorScheme`. Only `ui/theme/Theme.kt` and
-`ui/theme/Color.kt` may name a colour literally.
+Roles come from `MaterialTheme.colorScheme`. The scheme itself is built in `ui/theme/Theme.kt`,
+which is the only file allowed to name a colour literally.
 
 | Surface | Role |
 | --- | --- |
-| Screen | `background` |
-| Panel or card | `surfaceContainer` |
-| Nested control, toolbar button | `surfaceContainerHigh` |
-| Field and chip track | `surfaceContainerHigh` |
-| Dialog and sheet | `surfaceContainer` |
+| Screen background | `background` |
+| Card sitting on the background | `surfaceContainer` |
+| Card or pill nested inside another surface, and interactive settings rows | `surfaceContainerHigh` |
+| Dialog and bottom sheet shell | `surfaceContainer` |
 
 | Text | Role |
 | --- | --- |
 | Primary | `onSurface` |
-| Supporting and metadata | `onSurfaceVariant` |
-| Disabled | `onSurface` at `0.38f` |
-| Disabled fill | `onSurface` at `0.08f` |
-| Borders | `outlineVariant` at `0.65f` |
-| Dividers | `outlineVariant` at `0.55f` |
-| Focus | `primary` |
+| Secondary, supporting, metadata | `onSurfaceVariant` at alpha `0.7f` |
+| Tertiary, deliberately quiet | `onSurfaceVariant` at alpha `0.6f` |
+| Disabled content | `onSurface` at alpha `0.38f` |
+| Disabled container fill | `onSurface` at alpha `0.12f` |
 
-State vocabulary:
+Borders are always 1dp. The alpha is what changes, and it is the value that has drifted the most
+in this app, so it is worth getting right:
+
+| Border | Colour |
+| --- | --- |
+| Card | `outlineVariant` at `0.35f` |
+| Dialog shell | `outlineVariant` at `0.4f` |
+| Action pill wrapper and other nested surfaces | `outlineVariant` at `0.2f` |
+| Divider (`HorizontalDivider`) | `outlineVariant` at `0.3f` |
+| Text field, unfocused | `outlineVariant` at `0.5f` |
+| Text field, focused | `primary` at `0.8f` |
+| Tinted button, matching its accent | the accent role at `0.2f` |
+
+### What the colours mean
+
+The container lifecycle is consistent across the app and new states should join it rather than
+invent a parallel vocabulary.
 
 | State | Accent |
 | --- | --- |
-| Running, start, healthy | `primary` |
-| Stopped, failed, destructive | `error` |
-| Warning, caveat | `tertiary` |
-| In progress, downloading | `tertiary` |
-| Idle, unknown | `onSurfaceVariant` |
+| Running, healthy, start action | `primary` |
+| Stopped, failed, destructive, stop action | `error` |
+| Done with a caveat, warning | `warningContainer`, an extended colour in `ui/theme/Color.kt` |
+| Restart action | `secondary` |
+| In progress, restarting, downloading | `tertiary` |
+| Idle, unknown, nothing to report | `onSurfaceVariant` at `0.6f` |
+| Disabled | fill `onSurface` at `0.08f`, accent `outlineVariant` |
 
-The init system legend in `ui/screen/InitServiceScreen.kt` keeps its hand-picked traffic light.
-Dynamic colour and the accent picker move `primary` and `tertiary`, and six states sit in that
-legend at once, so they cannot borrow the theme roles.
+A tinted button takes its fill from the matching container role at alpha `0.4f`, for example
+`primaryContainer.copy(alpha = 0.4f)` for start and `errorContainer.copy(alpha = 0.4f)` for stop,
+with a 1dp border of the accent at `0.2f`.
+
+The init system screens are the one documented exception. Their status hues live in
+`statusColorFor()` in `ui/screen/InitServiceScreen.kt` and are a hand picked traffic light, not
+theme roles, because six of those states can sit in the legend row at once and `primary` and
+`tertiary` move with dynamic colour and the palette picker. Take a status colour from that
+function, never from a literal.
 
 ## Typography
 
-The scale lives in `ui/theme/Type.kt`. Use the named styles, do not set `fontSize` at a call site.
+The scale lives in `ui/theme/Type.kt` and all fifteen slots are configured. Use the named styles.
+There are only twelve `fontSize` overrides in the whole app and none of them are a good example.
+
+UI text is `FontFamily.Default`. Anything the machine produced, a log line, a unit name, a config
+file, a path, is JetBrains Mono, imported from `ui/theme/Type.kt`. Do not declare a local font
+family.
 
 | Element | Style |
 | --- | --- |
-| Page title | `headlineMedium`, Bold |
-| Compact header title | `titleLarge`, Bold |
+| Screen title in a `TopAppBar` | `titleLarge`, Bold |
+| Dialog title | `titleLarge`, Bold, left aligned |
 | Card title | `titleMedium`, SemiBold |
-| Section label | `titleSmall`, uppercase, letterSpacing 1.2 |
-| Eyebrow | `labelSmall`, mono, `primary`, uppercase |
-| Body | `bodyMedium` |
-| Supporting line | `bodySmall`, `onSurfaceVariant` |
+| Section header inside a screen | `titleSmall`, Bold, `primary` |
 | Button label | `labelLarge`, SemiBold |
-| Status badge | `labelSmall`, mono, Bold, uppercase |
-| Machine value | `bodySmall` or `headlineSmall`, JetBrains Mono |
+| Body copy in a dialog | `bodyMedium` |
+| Helper text, metadata, subtitles | `bodySmall` with `onSurfaceVariant` at `0.7f` |
+| Status pill label | `labelSmall`, Black, `letterSpacing = 0.5.sp`, uppercase |
+| Machine output | `bodySmall` with the JetBrains Mono family |
 
 ## Spacing
 
-The scale is **4, 8, 12, 16, 20, 24, 32** (`DsSpace`). Nothing else.
+The scale is **4, 8, 12, 16, 20, 24, 32**. Nothing else. If a gap feels like it wants 14, it
+wants 12 or 16.
 
 | Gap | Value |
 | --- | --- |
-| Screen edge | 16 |
-| Between cards | 12 |
-| Inside a card | 16 |
-| Between actions | 8 |
-| Section top | 24 |
-| Header vertical | 12 |
-| Tight metadata | 4 |
+| Screen edge, lists and dashboards | 16 horizontal |
+| Screen edge, wizard and setup flows | 24 horizontal |
+| Screen edge, any screen below 320dp wide | 8 horizontal, via `screenGutter()` |
+| Between cards in a list | 16 |
+| Between blocks inside a card | 12 |
+| Card inner padding | 16 |
+| Dialog inner padding | 24 |
+| Icon to its label, chip to chip | 8 |
+| Tight metadata rows | 4 |
 
-Screens under the floating dock add its measured height plus 16 to their bottom content padding.
-The dock measures itself after layout, so three-button navigation and gesture navigation both
-clear it. Never use a fixed dp for this.
+Screens that sit under the floating tab bar get its measured height, system nav inset included,
+as `bottomBarInset`, and add `bottomBarInset + 16.dp` to their content padding so the last card
+clears it. Never a fixed dp: three-button nav's 48dp inset makes the bar much taller than gesture nav does.
 
-## Shape and elevation
+### Card headers line up across tabs
+
+The status card on the home tab, the container card, the running container card and the init
+service row all put a title on the left and a status pill on the right, above a divider. A user
+switching tabs sees those dividers and pills hold the same line, and that is deliberate.
+
+It only holds while all four use the same numbers, so they come from `CardContentPadding` and
+`CardHeaderHeight` in `ui/component/CardMetrics.kt` rather than being typed out per card. The
+header is 48dp because the container card puts an icon button in it.
+
+If you add a card with this shape, take the values from there. If you change them, you are
+moving every card header in the app, which is the intended way round.
+
+## Shape
 
 | Element | Radius |
 | --- | --- |
-| Panel, card | 12 |
-| Control, field, chip, button | 8 |
-| Dialog, sheet | 16 |
-| Bottom sheet top corners | 20 |
-| Status badge | 4 |
-| Dock | 20 |
+| Card | 20 |
+| Dialog shell | 24 |
+| Bottom sheet, top corners only | 24 |
+| Full width primary button | 20 |
+| Dropdown menu | 20 |
+| Action button | 16 |
+| Text field | 16 |
+| Action pill wrapper | 12 |
+| Status pill, small badge | 8 |
+| FAB and FAB menu items | component default, the toggle morphs its own radius |
 
-Every surface is flat. Depth is a surface step plus a 1dp border, never a shadow. The one
-exception is a Material component that owns its own elevation, the FAB menu, and the app no longer
-uses one on the main tabs.
+## The action pill
 
-## Page anatomy
+This is the pattern that keeps getting "fixed", so it gets its own section.
+
+A row of related actions sits inside a tinted wrapper:
+
+```kotlin
+Surface(
+    shape = RoundedCornerShape(12.dp),                    // wrapper
+    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+) {
+    Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Surface(
+            modifier = Modifier.weight(1f).height(48.dp),
+            shape = RoundedCornerShape(16.dp),            // button, larger than the wrapper
+            color = accentContainer.copy(alpha = 0.4f),
+            border = BorderStroke(1.dp, accent.copy(alpha = 0.2f))
+        ) { /* icon + labelLarge SemiBold */ }
+    }
+}
+```
+
+**The buttons are rounder than the box they sit in. That is the design.** The 4dp inset plus the
+larger inner radius makes the buttons read as sitting proud of the wrapper rather than nesting
+flush inside it. Matching the two radii flattens the effect and has been reverted twice already.
+
+Two sites use it: `ui/component/ContainerCard.kt` and `ui/screen/InitServiceScreen.kt`. It is for
+a row of peer actions inside a card. A dialog's confirm and cancel are not that, and have their
+own rule below.
+
+## Floating action button
+
+A screen has at most one FAB. It sits bottom right in the screen's root `Box`, with
+`padding(end = 24.dp, bottom = bottomBarInset + 16.dp)` so it clears the floating tab bar.
+Snackbars on the tab screens sit at the same `bottomBarInset + 16.dp` and may cover the FAB while
+they show.
+
+More than one action behind a FAB is a Material 3 Expressive `FloatingActionButtonMenu` with a
+`ToggleFloatingActionButton` as its button, never a small FAB stacked on an extended one. The
+toggle shows a plus that morphs into a cross; the items rise above it, each with an icon and a
+short label, the most used one nearest the FAB. Two to six items. Colour, shape, size, icon
+animation and motion stay at the component defaults, which is the point of using the component.
+
+The expanded flag is `rememberSaveable` so it survives rotation. It closes on the toggle, on
+back press (`BackHandler`), on picking an item, and on a tap on the list behind it. The toggle
+carries a `contentDescription` and a `stateDescription`, and the last item carries a "Close
+menu" custom accessibility action because TalkBack reaches the toggle before the first item.
+
+One site uses it: `ui/screen/ContainersScreen.kt`. A second screen copies that block.
+
+## Settings screens and forms
+
+A screen of options is the settings screen's layout, the container config screen included:
 
 ```
-DsPageHeader                     eyebrow, title, supporting line, 48dp actions
-  DsSectionHeader("01")          uppercase label with mono index
-  DsCard                         neutral panel, optional 2dp accent line
-  DsSectionHeader("02")
-  ...
+GroupHeader("Networking")          titleSmall Bold primary, inset to the text inside the group
+GroupIntro("...")                  optional, bodyMedium onSurfaceVariant @ 0.7f
+SettingsGroup {                    one surface per section, radius 24, border outlineVariant @ 0.35f
+  SwitchItem / NavRow / RadioRow / EntryRow / GroupField
+  GroupDivider()                   between rows, inset 16
+}
+AddEntryButton("Add ...")          under a list, outside the group, 12dp below it
 ```
 
-The header sits on the background, not on a raised bar. An action is a 48dp `DsIconAction` square.
-A page has at most two header actions, plus the back control on a pushed page.
+Inside a page the section titles are `GroupHeader(sub = true)`, `bodyLarge` Bold in
+`onSurface`, the size the form's sub-titles always had. Rows follow `SwitchItem`: 56dp for one
+line, 72dp for two, 12dp vertical padding, text starting on the same line whether the row leads
+with an icon or a radio. A list entry is 72dp whatever it holds.
 
-A card never centres its content. Titles are left aligned. A row pairs a title with a control
-using `Arrangement.SpaceBetween`.
+Rows sit flat inside the group. A row never draws its own card, and a section never becomes a
+stack of cards. Headings are `GroupHeader`; a sub-section is another header and group, never
+a bold title in between. A warning about a setting is a `DangerousWarningCard` above its
+group, the same red card as the privileged page, not a tinted note in another colour.
 
-## Buttons and actions
+| Setting needs | Row |
+| --- | --- |
+| On or off | `SwitchItem` |
+| One of a few options, each worth a line of explanation | `RadioRow` in a `selectableGroup()` group |
+| One of many options | `DsDropdown` inside a `GroupField` |
+| Free text | `OutlinedTextField` inside a `GroupField` |
+| A list, a set of related fields, or more than fits in a row | `NavRow` to a page, showing the current value |
 
-`DsActionButton` has four styles: `Filled` for the single primary action, `Tonal` for the common
-secondary, `Outline` for a quiet peer, and `Danger` for stop and delete. Height is 48dp, radius 8,
-label `labelLarge`.
+**Pages, sheets and dialogs.** A page is a full screen (`ConfigPageScaffold`) for an option with
+its own structure: a list, several fields, a draft. A sheet (`DsBottomSheet`) is for adding one
+item to a list, so the list stays in view behind it. A dialog is for a decision that blocks:
+a confirmation, a typed phrase.
 
-A row of peers sits in `DsActionStrip`, which adds 4dp padding and an 8dp gap. The strip is for
-actions on one object, not for page navigation.
+Every page is a `DraftPageScaffold` and edits a draft. Leaving keeps the draft, the way the
+form always applied edits, unless the page's own rules fail: then back, from the arrow or the
+system, asks "Discard edits?" so no page leaves broken settings behind. Privileged mode is the
+one page with a button, because turning a flag on needs the typed phrase first: its "Done"
+`PrimaryActionBottomBar` is grey until something changed and the phrase matches, and back
+there never keeps the draft.
 
-Icon-only actions are `DsIconAction`, 48dp, 1dp border, 18dp glyph.
+## Bottom sheets
 
-## Status
+`DsBottomSheet` lays out like `DsDialog`: title, a body that scrolls, and a `footer` measured
+first, so the actions stay above the keyboard. It stops below the status bar, pads for the
+navigation bar and the keyboard itself, and skips the half-open state. The footer is a
+`DialogFooterRow`.
 
-`DsBadge` is a dot plus an uppercase mono label in a 4dp chip. Colour is the state. The badge
-never changes width because of a label change: the text is short and fixed ("RUNNING", "STOPPED").
+## Small screens
 
-While an operation runs, a 14dp spinner sits beside the badge. The badge keeps reporting the last
-settled state so nothing shifts.
+Droidspaces runs on 240x320 flip phones and on phones in landscape with the keyboard up, so
+every screen is checked at both.
 
-## Navigation
+- Below 320dp wide (`isCompactWidth()`): side margins halve (`screenGutter()`), two fields
+  side by side stack, footer buttons stack.
+- Below 480dp tall (`isShortHeight()`): the top bar drops to 48dp and the action bar's padding
+  shrinks.
+- No fixed widths. Every text in a row takes `weight(1f)` and a `maxLines`.
+- Test with `adb shell wm size 240x320` and `wm density 120`, then 160. Read the current
+  `wm density` first and put it back after.
 
-Four destinations: **Overview**, **Containers**, **Monitor**, **System**.
+## Dialogs
 
-- Below 600dp wide: `DsBottomDock`, floating 12dp from the edges, above the navigation bar.
-- At 600dp and wider: `DsNavRail`, a 96dp column that is part of the page, with the same order.
-- Selection is a tinted control plus the signal colour, never a second screen or a sheet.
-- Back from any tab returns to Overview. Each tab keeps its scroll and pager position.
-- Settings, Requirements, boot order and terminal appearance are pushed pages from System.
+Every dialog is `DsDialog`, and it owns the layout, not just the frame:
 
-The pager stays so horizontal swiping still works. The dock and rail both drive it.
+```
+Surface(fillMaxWidth, padding 24, heightIn(max = screen - 48))   bounded by LocalConfiguration
+  Column(padding 24, spacedBy 16)
+    Column(weight(1f, fill = false), scrolls)   the body: shrinks, scrolls
+    footer()                                    natural height, measured first
+```
 
-## Cards and lists
+The bound comes from `LocalConfiguration`, not the window. The activity handles
+`configChanges` itself, so a dialog open through a rotation keeps its stale window
+constraints; the configuration is live, and it is what `TerminalDialog` has always sized
+from.
 
-`DsCard` is the only panel. It has an optional `accent` line, a 12dp radius, a 1dp border, and a
-16dp inner padding. A card that needs a header row puts the title and badge on one line, a divider
-below it, then the body.
+**Actions go in the `footer` slot, never in the content.** That is the whole point of the
+component. A `Column` measures its unweighted children in order against the space that is left,
+so actions placed below a scrolling body get measured with whatever remains: fine in portrait,
+a sliver or nothing in landscape. The footer is unweighted and declared second, so it is
+measured first and always gets its full height.
 
-Lists are `LazyColumn` with stable keys. Search is `DsSearchField`, filters are `DsFilterChip`
-inside a `FlowRow`, so three filters wrap instead of clipping on a 240dp screen. Sorting is a
-single header icon that toggles between name and running-first, and the current mode is announced
-in the content description.
+Callers therefore do not set a width, their own padding, or their own scroll, and never pass
+`wrapContentHeight()`, the shell already wraps. The shell handles the keyboard itself, so no
+`imePadding()` either. It pads for the keyboard only, never the system bars: their insets drop
+to zero while the window closes, and padding for them makes the dialog jump on dismiss. What is genuinely per-dialog rides on the `modifier`: for a dialog that
+should stay modest, a cap on the whole dialog, `heightIn(max = ...)` or a `fillMaxHeight`
+fraction, never on an inner list.
+A shell-level cap is safe because a squeezed body scrolls instead of eating the footer.
+Destructive dialogs pass `borderColor` to outline in `error`. A body built on a `LazyColumn`
+passes `scrollableContent = false` and weights the list, `fill = false` if the dialog should
+wrap when the list is short, because a lazy list cannot live inside a scrolling parent.
 
-Empty, loading and error states are `DsEmptyState`, `DsLoadingState`, `DsErrorState`. A list that
-is empty because of a search says so and offers no install action.
+The title is `titleLarge` Bold, left aligned, and is the first thing in the content.
 
-## Charts
+## Dialog actions
 
-`DsRing` is used only for a value with a known maximum: memory, storage, a CPU share. There is no
-history layer, so no sparkline is drawn. A ring has a 7dp stroke, a 3dp cap, a muted track, and
-animates to its target. It carries a content description with the value.
+Every dialog ends with `DialogFooterRow`. It is two equal-weight buttons, a quiet tonal dismiss
+and a filled confirm:
 
-## Motion
+| | Value |
+| --- | --- |
+| Row | `fillMaxWidth`, `spacedBy(12.dp)` |
+| Both buttons | `weight(1f).height(48.dp)` |
+| Radius | 16 |
+| Dismiss | fill `onSurface @ 0.06f`, border `1.dp outlineVariant @ 0.35f`, label `onSurfaceVariant` |
+| Confirm | fill `primary`, label `onPrimary`, no border |
+| Confirm, destructive | fill `error`, label `onError`, via `destructive = true` |
+| Confirm, disabled | fill `onSurface @ 0.12f`, label `onSurface @ 0.38f` |
 
-`AnimationUtils` holds the durations: 140 fast, 220 normal, 320 slow. Pushed pages rise slightly
-in the direction of travel and fade. Pop reverses that. Lists keep their entry and exit
-animations. Rings interpolate on each reading. No animation decorates a control that does not
-change.
+Equal weight and a fixed height are the point: the two buttons are always the same size, and
+neither one changes because of the other's label. Below 320dp wide the row stacks, confirm on
+top, because two buttons side by side would leave each about 60dp.
 
-## Small screens and accessibility
+**Labels are one line and ellipsize.** If a label wraps, the label is too long. Shorten the
+string, do not grow the button. "Allow" and "Not now" beat "Grant Permission" and "I Understand"
+on a control that is half a dialog wide.
 
-- Below 320dp wide, headers drop to `titleLarge`, supporting lines and subtitles give way, and
-  grids become one column. `DsPageHeader` and `isShortWindow()` handle the height case.
-- Everything tappable is at least 48dp. That is a floor, not a preference.
-- Text takes `weight(1f)` and ellipsizes. A wrapped button label is a label that is too long.
-- Content scrolls; the dock and the system bars are inset from, never overlapped.
-- The dock rises with the keyboard.
-- Status is always text plus colour, never colour alone.
+A dialog with a single action uses the dismiss button on its own, full width. The footer always
+draws a pair.
 
-## Improvements still open
+## Icons and touch targets
 
-- The setup flow (Welcome, Root Check, Installation) keeps its own hero geometry. It inherits the
-  new palette and type but not `DsPageHeader`.
-- The installation wizard and init service pages still use their original form structure. They
-  use the shared groups, dialogs and buttons, so they match, but they have not been re-laid out.
-- A dedicated Contributors page does not exist. Contributors remain in the About dialog.
+| Use | Size |
+| --- | --- |
+| Leading icon on a card or list row | 20 |
+| Toolbar action, icon inside a button | 18 |
+| Inline with `bodySmall` text | 16 |
+| Dialog header, distro identity | 24 |
+| Empty state hero | 64 |
+| Status dot | 6 |
+
+Anything tappable is at least **48dp**. That is an accessibility floor, not a style preference,
+and it is the one rule in this file that a design argument does not get to override.
+
+## Alignment
+
+Rows are `Alignment.CenterVertically`. The app does this 101 times and deviates once.
+
+Card titles and dialog titles are left aligned, always. A card row that pairs a title with a
+control uses `Arrangement.SpaceBetween`.
+
+Centred text is reserved for full screen states: empty lists, loading, setup heroes. If content
+is centred inside a card, it is probably wrong.
+
+## Motion and loading
+
+Spinners come from `LoadingIndicator` with a `LoadingSize`, never a raw `.size(n.dp)` on a
+progress indicator. Whole screen loading is `FullScreenLoading`. `LoadingSize.Hero` (144) is
+the one setup-flow hero loader; the empty-state icon stays 64.
+Animation timings come from `AnimationUtils`.
+Hero state changes use `MaterialTheme.motionScheme`, which the theme sets to
+`MotionScheme.expressive()`: `defaultSpatialSpec()` for size and position, `defaultEffectsSpec()`
+for fades, `slowEffectsSpec()` for a result line fading in. Never hand-type a spring, and never
+`DampingRatioMediumBouncy` on a result.
+
+A refresh button that reloads a list in place, in a card header or a sheet title, is
+`DsRefreshButton`. It spins a full turn on every tap and keeps turning while the reload runs,
+stopping only at the top of a turn. Most reloads finish in milliseconds, and without the spin the
+tap looks ignored. A top bar refresh that swaps the screen to its own loading state does not need
+it, the loading state is the feedback.
+
+### The setup flow
+
+Welcome, the feature pager, the root check and the backend installer share one geometry, and
+it lives in `ui/component/SetupHero.kt`. `SetupPage` is the skeleton under the Scaffold: a 40dp
+row above, the frame slot that centres its content or scrolls when the window is too short, and
+a 44dp row below. `SetupFrame` is the frame: a 240dp hero box, then the title and the copy in a
+fixed text block. `SetupHero` is the hero of a screen that does work, a 240dp
+`MaterialShapes.Cookie12Sided` in `primaryContainer`, `warningContainer` or `errorContainer`
+holding the loader or a 96dp glyph, and only its colour and content change between states.
+`SetupActionBar` is the one button: a full pill with no bar surface and no divider, which is a
+decided exception to the 20dp bar button below. Build a new setup screen out of these and the
+hero, the title and the button land on the same rows as every other.
+
+## When the rule does not fit
+
+Sometimes it will not, and the answer is not to quietly use a different number.
+
+Say it in the PR, and leave a comment at the site explaining what the deviation buys, the way the
+action pill wrappers now do. An undocumented deviation is drift and the next contributor will
+"fix" it. A documented one is a decision, and it survives.
+
+## Decided exceptions
+
+Looked at, deliberately left alone. Do not re-open these without a reason the original one
+misses.
+
+- **The FAB menu is elevated.** `ToggleFloatingActionButton` and `FloatingActionButtonMenuItem`
+  take no elevation parameter and draw the Material shadow. A button floating over a scrolling
+  list is the one place a shadow does structural work, and the extended FAB it replaced already
+  shipped with its default elevation.
+- **`TerminalDialog` and `ProgressDialog` do not use `DsDialog`.** The first is three quarters
+  of the screen with its own header row, the second is not dismissible. If a third dialog ever
+  wants either shape, that is the moment to widen the shared shell.
+- **The init system status hues** (`statusColorFor()` in `ui/screen/InitServiceScreen.kt`) stay
+  a hand picked traffic light rather than theme roles. Six of the seven states can sit in the
+  legend row at once, and `primary` and `tertiary` move with dynamic colour, so running and
+  abnormal would collapse onto nearly the same colour under some palettes.
+- **The terminal virtual keys background** (`ui/screen/ContainerTerminalScreen.kt`) stays a
+  literal. It sits against the terminal's own black, which does not follow the app theme, so a
+  surface role would give a light strip under a dark terminal.
+- **The setup flow's button** (`SetupActionBar` in `ui/component/SetupHero.kt`) is a full pill
+  with no bar surface and no divider, not the 20dp bar button. It sits alone on the background
+  under a hero rather than over scrolling content, and the pill is the Expressive button shape
+  the welcome pages are built around. Its disabled colours also stay equal to its enabled
+  colours: it is disabled only while a check or an install is in flight, and greying it out for
+  that moment reads as a flicker.
+- **The unit detail and override editor titles** keep a smaller style than every other screen
+  title. Both display systemd unit names, which are long, so `titleLarge` would only ellipsize
+  sooner.
+- **`EmptyState` is not adopted** by `ui/screen/AutoBootPriorityScreen.kt` or the private empty
+  state in `ui/screen/InitServiceScreen.kt`: absorbing them needs roughly seven new parameters
+  for two call sites. `ui/component/ContainerUsersCard.kt` is not an empty state at all, just a
+  plain `Text` in a card body.
+- **Faint fill alphas of 0.03, 0.04 and 0.06** in the terminal dialog, the terminal screen and
+  the sparse image screen stay unshared. They are invisible in isolation, and snapping them
+  together would mean inventing a token for something nobody can see.

@@ -242,7 +242,7 @@ fun SparseImageConfigScreen(
             // Info card
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
                 tonalElevation = 0.dp
@@ -296,7 +296,7 @@ fun SparseImageConfigScreen(
             if (useSparseImage) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                     tonalElevation = 0.dp
@@ -379,7 +379,7 @@ private fun StorageNoticeCard(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(20.dp),
         color = container.copy(alpha = 0.2f),
         border = BorderStroke(1.dp, accent.copy(alpha = 0.3f)),
         tonalElevation = 0.dp

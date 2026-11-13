@@ -6,7 +6,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
-val AMOLED_BLACK = Color(0xFF141218)
+val AMOLED_BLACK = Color(0xFF000000)
 
 /** Dark mode read off the scheme itself, so AMOLED and dynamic colour need no second hook. */
 val ColorScheme.isDark: Boolean
@@ -46,92 +46,46 @@ enum class ThemePalette(
     // hues at tone 70 with the chroma pushed up (60, 36, 48 in HCT).
     val swatch: List<Color>? = null,
 ) {
-    /*
-     * The app's own scheme. Graphite surfaces, one signal colour that is only ever
-     * used for state or action, and a cool steel secondary so status hues never have
-     * to compete with the accent. This is the default palette and the one the new
-     * design language is drawn against.
-     */
-    GRAPHITE(
-        displayName = "Graphite",
-        swatch = listOf(Color(0xFFC6F24E), Color(0xFF9AB4C4), Color(0xFFF5B94C)),
-        fixedLight = lightColorScheme(
-            primary = Color(0xFF3F5F00), onPrimary = Color(0xFFFFFFFF),
-            primaryContainer = Color(0xFFD6F59B), onPrimaryContainer = Color(0xFF172300),
-            inversePrimary = Color(0xFFB4DC55),
-            secondary = Color(0xFF47606D), onSecondary = Color(0xFFFFFFFF),
-            secondaryContainer = Color(0xFFD3E8F3), onSecondaryContainer = Color(0xFF081E29),
-            tertiary = Color(0xFF7A5B00), onTertiary = Color(0xFFFFFFFF),
-            tertiaryContainer = Color(0xFFFFDEA3), onTertiaryContainer = Color(0xFF271900),
-            background = Color(0xFFF3F4EF), onBackground = Color(0xFF15181A),
-            surface = Color(0xFFF3F4EF), onSurface = Color(0xFF15181A),
-            surfaceVariant = Color(0xFFE2E6DF), onSurfaceVariant = Color(0xFF444B4F),
-            inverseSurface = Color(0xFF2A2F32), inverseOnSurface = Color(0xFFF1F2ED),
-            outline = Color(0xFF747C80), outlineVariant = Color(0xFFC6CCC5),
-            surfaceBright = Color(0xFFF9FAF5), surfaceDim = Color(0xFFDADDD6),
-            surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF7F8F2),
-            surfaceContainer = Color(0xFFEEF0E9), surfaceContainerHigh = Color(0xFFE8EAE3),
-            surfaceContainerHighest = Color(0xFFE1E4DD),
-        ),
-        fixedDark = darkColorScheme(
-            primary = Color(0xFFC6F24E), onPrimary = Color(0xFF1B2300),
-            primaryContainer = Color(0xFF2B3A05), onPrimaryContainer = Color(0xFFDFFFA3),
-            inversePrimary = Color(0xFF3F5F00),
-            secondary = Color(0xFF9AB4C4), onSecondary = Color(0xFF0E1B22),
-            secondaryContainer = Color(0xFF1D303A), onSecondaryContainer = Color(0xFFC6DEEC),
-            tertiary = Color(0xFFF5B94C), onTertiary = Color(0xFF2A1A00),
-            tertiaryContainer = Color(0xFF4A3405), onTertiaryContainer = Color(0xFFFFDEA3),
-            background = Color(0xFF0A0C0E), onBackground = Color(0xFFE9EEF2),
-            surface = Color(0xFF0A0C0E), onSurface = Color(0xFFE9EEF2),
-            surfaceVariant = Color(0xFF22282D), onSurfaceVariant = Color(0xFFA9B4BC),
-            inverseSurface = Color(0xFFE9EEF2), inverseOnSurface = Color(0xFF1A1F23),
-            outline = Color(0xFF66737D), outlineVariant = Color(0xFF2A3239),
-            surfaceBright = Color(0xFF22282D), surfaceDim = Color(0xFF0A0C0E),
-            surfaceContainerLowest = Color(0xFF050607), surfaceContainerLow = Color(0xFF0F1214),
-            surfaceContainer = Color(0xFF14181B), surfaceContainerHigh = Color(0xFF1A1F23),
-            surfaceContainerHighest = Color(0xFF22282D),
-        ),
-    ),
     // The Material You scheme One UI built from a green wallpaper, seed #8CB496 in the
     // Tonal Spot style, read off the phone's system_* colour resources
     BROCCOLI(
-        displayName = "Workstation Dark",
+        displayName = "Broccoli",
         swatch = listOf(Color(0xFF35C278), Color(0xFF7AB98E), Color(0xFF2EBAD8)),
         fixedLight = lightColorScheme(
-            primary = Color(0xFF1E4D2B), onPrimary = Color(0xFFFFFFFF),
-            primaryContainer = Color(0xFFA5D6A7), onPrimaryContainer = Color(0xFF00210A),
-            inversePrimary = Color(0xFF81C784),
-            secondary = Color(0xFF37474F), onSecondary = Color(0xFFFFFFFF),
-            secondaryContainer = Color(0xFFCFD8DC), onSecondaryContainer = Color(0xFF102027),
-            tertiary = Color(0xFF006064), onTertiary = Color(0xFFFFFFFF),
-            tertiaryContainer = Color(0xFFB2EBF2), onTertiaryContainer = Color(0xFF00191E),
-            background = Color(0xFFF8F9FA), onBackground = Color(0xFF1A1C1E),
-            surface = Color(0xFFF8F9FA), onSurface = Color(0xFF1A1C1E),
-            surfaceVariant = Color(0xFFE0E2E5), onSurfaceVariant = Color(0xFF43474E),
-            inverseSurface = Color(0xFF2F3133), inverseOnSurface = Color(0xFFF1F0F4),
-            outline = Color(0xFF73777F), outlineVariant = Color(0xFFC3C7CF),
-            surfaceBright = Color(0xFFF8F9FA), surfaceDim = Color(0xFFD8DAE0),
-            surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF2F4F7),
-            surfaceContainer = Color(0xFFECEEF2), surfaceContainerHigh = Color(0xFFE6E8EC),
-            surfaceContainerHighest = Color(0xFFDFE2E6),
+            primary = Color(0xFF2D6A45), onPrimary = Color(0xFFFFFFFF),
+            primaryContainer = Color(0xFFB0F1C2), onPrimaryContainer = Color(0xFF00210F),
+            inversePrimary = Color(0xFF95D5A8),
+            secondary = Color(0xFF4F6354), onSecondary = Color(0xFFFFFFFF),
+            secondaryContainer = Color(0xFFD1E8D4), onSecondaryContainer = Color(0xFF0D1F13),
+            tertiary = Color(0xFF3B6470), onTertiary = Color(0xFFFFFFFF),
+            tertiaryContainer = Color(0xFFBEEAF7), onTertiaryContainer = Color(0xFF001F26),
+            background = Color(0xFFF6FBF3), onBackground = Color(0xFF181D19),
+            surface = Color(0xFFF6FBF3), onSurface = Color(0xFF181D19),
+            surfaceVariant = Color(0xFFDCE5DB), onSurfaceVariant = Color(0xFF414942),
+            inverseSurface = Color(0xFF2C322D), inverseOnSurface = Color(0xFFEDF2EB),
+            outline = Color(0xFF717971), outlineVariant = Color(0xFFC0C9BF),
+            surfaceBright = Color(0xFFF6FBF3), surfaceDim = Color(0xFFD6DBD4),
+            surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF0F5EE),
+            surfaceContainer = Color(0xFFEAEFE8), surfaceContainerHigh = Color(0xFFE5EAE2),
+            surfaceContainerHighest = Color(0xFFDFE4DD),
         ),
         fixedDark = darkColorScheme(
-            primary = Color(0xFF4ADE80), onPrimary = Color(0xFF003913),
-            primaryContainer = Color(0xFF143322), onPrimaryContainer = Color(0xFF86EFAC),
-            inversePrimary = Color(0xFF166534),
-            secondary = Color(0xFF94A3B8), onSecondary = Color(0xFF0F172A),
-            secondaryContainer = Color(0xFF1E293B), onSecondaryContainer = Color(0xFFCBD5E1),
-            tertiary = Color(0xFF38BDF8), onTertiary = Color(0xFF0369A1),
-            tertiaryContainer = Color(0xFF0C4A6E), onTertiaryContainer = Color(0xFF7DD3FC),
-            background = Color(0xFF0B0F12), onBackground = Color(0xFFE2E8F0),
-            surface = Color(0xFF0B0F12), onSurface = Color(0xFFE2E8F0),
-            surfaceVariant = Color(0xFF1E293B), onSurfaceVariant = Color(0xFF94A3B8),
-            inverseSurface = Color(0xFFE2E8F0), inverseOnSurface = Color(0xFF0B0F12),
-            outline = Color(0xFF475569), outlineVariant = Color(0xFF1E293B),
-            surfaceBright = Color(0xFF1E293B), surfaceDim = Color(0xFF0B0F12),
-            surfaceContainerLowest = Color(0xFF070A0D), surfaceContainerLow = Color(0xFF0F172A),
-            surfaceContainer = Color(0xFF131D2E), surfaceContainerHigh = Color(0xFF1E293B),
-            surfaceContainerHighest = Color(0xFF293548),
+            primary = Color(0xFF95D5A8), onPrimary = Color(0xFF00391D),
+            primaryContainer = Color(0xFF0F512F), onPrimaryContainer = Color(0xFFB0F1C2),
+            inversePrimary = Color(0xFF2D6A45),
+            secondary = Color(0xFFB6CCB9), onSecondary = Color(0xFF223527),
+            secondaryContainer = Color(0xFF384B3D), onSecondaryContainer = Color(0xFFD1E8D4),
+            tertiary = Color(0xFFA3CDDA), onTertiary = Color(0xFF023640),
+            tertiaryContainer = Color(0xFF214C57), onTertiaryContainer = Color(0xFFBEEAF7),
+            background = Color(0xFF0F1511), onBackground = Color(0xFFDFE4DD),
+            surface = Color(0xFF0F1511), onSurface = Color(0xFFDFE4DD),
+            surfaceVariant = Color(0xFF414942), onSurfaceVariant = Color(0xFFC0C9BF),
+            inverseSurface = Color(0xFFDFE4DD), inverseOnSurface = Color(0xFF2C322D),
+            outline = Color(0xFF8B938A), outlineVariant = Color(0xFF414942),
+            surfaceBright = Color(0xFF353B36), surfaceDim = Color(0xFF0F1511),
+            surfaceContainerLowest = Color(0xFF0A0F0B), surfaceContainerLow = Color(0xFF181D19),
+            surfaceContainer = Color(0xFF1C211C), surfaceContainerHigh = Color(0xFF262B27),
+            surfaceContainerHighest = Color(0xFF313631),
         ),
     ),
     // The Material You scheme One UI built from a gold wallpaper, seed #CFA369 in the
@@ -327,6 +281,6 @@ enum class ThemePalette(
 
     companion object {
         fun fromName(name: String): ThemePalette =
-            entries.find { it.name == name } ?: GRAPHITE
+            entries.find { it.name == name } ?: BROCCOLI
     }
 }

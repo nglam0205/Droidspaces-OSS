@@ -144,7 +144,7 @@ fun InstallationScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Spacer(modifier = Modifier.height(24.dp))
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(20.dp),
                             color = MaterialTheme.colorScheme.surfaceContainer,
                             tonalElevation = 0.dp
                         ) {

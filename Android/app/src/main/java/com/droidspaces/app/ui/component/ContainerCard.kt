@@ -6,38 +6,17 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Tag
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -45,32 +24,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
+import com.droidspaces.app.util.ResourceLimits
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.droidspaces.app.R
-import com.droidspaces.app.ui.design.DsActionButton
-import com.droidspaces.app.ui.design.DsActionStrip
-import com.droidspaces.app.ui.design.DsBadge
-import com.droidspaces.app.ui.design.DsButtonStyle
-import com.droidspaces.app.ui.design.DsCard
-import com.droidspaces.app.ui.design.DsDivider
-import com.droidspaces.app.ui.design.DsIconAction
-import com.droidspaces.app.ui.design.DsSpace
-import com.droidspaces.app.ui.theme.JetBrainsMono
 import com.droidspaces.app.util.AnimationUtils
 import com.droidspaces.app.util.ContainerInfo
 import com.droidspaces.app.util.ContainerOSInfoManager
 import com.droidspaces.app.util.ContainerStatus
 import com.droidspaces.app.util.IconUtils
-import com.droidspaces.app.util.ResourceLimits
 
 /**
  * Per-item callbacks for [ContainerCard], grouped so the call site passes one
- * stable object instead of eleven separate lambdas.
+ * stable object instead of 11 separate lambdas.
  */
 data class ContainerCardActions(
     val onStart: () -> Unit = {},
@@ -86,12 +57,7 @@ data class ContainerCardActions(
     val onShowLogs: () -> Unit = {},
 )
 
-/**
- * One container, as a row in a workbench: identity and state at the top, the
- * limits it was given below, then the actions that act on it. The card itself is
- * never tinted by state; the accent line and the status chip carry it.
- */
-@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun ContainerCard(
     container: ContainerInfo,
@@ -101,243 +67,307 @@ fun ContainerCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val cacheVersion by ContainerOSInfoManager.iconCacheVersion
-    val cachedOsInfo = remember(container.name, cacheVersion) {
-        ContainerOSInfoManager.getCachedOSInfo(container.name, context)
-    }
-    val distro = cachedOsInfo?.prettyName ?: cachedOsInfo?.name ?: "linux"
-    val isRunning = container.status == ContainerStatus.RUNNING
-    val statusColor = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    val displayHostname = container.hostname.takeIf { it.isNotEmpty() } ?: container.name
+    val cardShape = RoundedCornerShape(20.dp)
 
-    DsCard(
+    Surface(
         modifier = modifier
+            .fillMaxWidth()
+            .clip(cardShape)
             .combinedClickable(
-                onClick = { if (isRunning) actions.onEnter() else actions.onToggleExpand() },
-                onLongClick = actions.onToggleExpand
-            )
-            .then(
-                Modifier.animateContentSize(animationSpec = AnimationUtils.mediumSpec())
+                onClick = {
+                    if (container.isRunning) actions.onEnter() else actions.onToggleExpand()
+                },
+                onLongClick = actions.onToggleExpand,
+                indication = ripple(bounded = true),
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             ),
-        accent = if (isRunning) MaterialTheme.colorScheme.primary else null,
-        contentPadding = PaddingValues(DsSpace.md)
+        shape = cardShape,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = IconUtils.getDistroIcon(distro),
-                contentDescription = null,
-                modifier = Modifier.size(26.dp),
-                tint = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.width(DsSpace.md))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = container.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "$displayHostname · ${container.netMode}",
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMono),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            DsBadge(
-                label = if (isRunning) context.getString(R.string.status_running) else context.getString(R.string.status_stopped),
-                color = statusColor
-            )
-            if (isOperationRunning) {
-                Spacer(Modifier.width(DsSpace.sm))
-                CircularProgressIndicator(
-                    modifier = Modifier.size(14.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 1.5.dp
-                )
-            }
-            Spacer(Modifier.width(DsSpace.xs))
-            DsIconAction(
-                icon = Icons.AutoMirrored.Filled.Article,
-                contentDescription = context.getString(R.string.view_logs),
-                onClick = actions.onShowLogs
-            )
-        }
-
-        DsDivider(Modifier.padding(vertical = DsSpace.md))
-
-        val limits = buildList {
-            if (container.useSparseImage && container.sparseImageSizeGB != null) {
-                add(painterResource(R.drawable.ic_disk) to context.getString(R.string.gb_size, container.sparseImageSizeGB))
-            }
-            ResourceLimits.memoryLabel(context, container)?.let { add(rememberVectorPainter(Icons.Default.Memory) to it) }
-            ResourceLimits.cpuLabel(context, container)?.let { add(rememberVectorPainter(Icons.Default.Speed) to it) }
-            ResourceLimits.pidsLabel(context, container)?.let { add(rememberVectorPainter(Icons.Default.Tag) to it) }
-            container.pid?.let { add(rememberVectorPainter(Icons.Default.Terminal) to "pid $it") }
-        }
-        if (limits.isNotEmpty()) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(DsSpace.md),
-                verticalArrangement = Arrangement.spacedBy(DsSpace.xs)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(animationSpec = AnimationUtils.mediumSpec())
+                .padding(CardContentPadding),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(CardHeaderHeight),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                limits.forEach { (icon, label) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            painter = icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.width(4.dp))
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Re-read cache whenever iconCacheVersion changes (bumped after prefetch)
+                    val cacheVersion by ContainerOSInfoManager.iconCacheVersion
+                    val cachedOsInfo = remember(container.name, cacheVersion) {
+                        ContainerOSInfoManager.getCachedOSInfo(container.name, context)
+                    }
+                    Icon(
+                        painter = IconUtils.getDistroIcon(cachedOsInfo?.prettyName ?: cachedOsInfo?.name),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = if (container.isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = container.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(onClick = actions.onShowLogs) {
+                        Icon(Icons.AutoMirrored.Filled.Article, context.getString(R.string.view_logs), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    }
+
+                    val (statusText, statusColor) = when (container.status) {
+                        ContainerStatus.RUNNING -> context.getString(R.string.status_running) to MaterialTheme.colorScheme.primary
+                        ContainerStatus.STOPPED -> context.getString(R.string.status_stopped) to MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    }
+
+                    // The label keeps reporting the state; the dot spins while an operation
+                    // runs. Changing the label would change the pill's width and shove the
+                    // logs button around every time a container starts or stops.
+                    StatusPill(
+                        label = statusText.uppercase(),
+                        color = statusColor,
+                        busy = isOperationRunning
+                    )
+                }
+            }
+            
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+            if (container.pid != null) {
+                Text(context.getString(R.string.pid_label, container.pid), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+            }
+
+            // Info Rows
+            val displayHostname = container.hostname.takeIf { it.isNotEmpty() } ?: container.name
+            val hasSparseImage = container.useSparseImage && container.sparseImageSizeGB != null
+            val netModeLabel = when (container.netMode) { "nat" -> context.getString(R.string.network_mode_nat_short); "none" -> context.getString(R.string.network_mode_none_short); "gateway" -> context.getString(R.string.network_mode_gateway_short); "macvlan" -> context.getString(R.string.network_mode_macvlan_short); else -> context.getString(R.string.network_mode_host_short) }
+            // Identity first, then what the container is given: disk, memory, CPU, processes.
+            val info = buildList {
+                add(rememberVectorPainter(Icons.Default.Computer) to displayHostname)
+                add(rememberVectorPainter(Icons.Default.Public) to netModeLabel)
+                if (hasSparseImage) add(painterResource(id = R.drawable.ic_disk) to context.getString(R.string.gb_size, container.sparseImageSizeGB ?: 0))
+                ResourceLimits.memoryLabel(context, container)?.let { add(rememberVectorPainter(Icons.Default.Memory) to it) }
+                ResourceLimits.cpuLabel(context, container)?.let { add(rememberVectorPainter(Icons.Default.Speed) to it) }
+                ResourceLimits.pidsLabel(context, container)?.let { add(rememberVectorPainter(Icons.Default.Tag) to it) }
+            }
+            val infoColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            // FlowRow, not Row: six items do not fit one line on a narrow display, so
+            // they wrap as whole icon+value units. The comma rides with the item
+            // before it, so a wrapped line never starts with one, and a long hostname
+            // ellipsizes inside its own unit instead of pushing the rest off the card.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                info.forEachIndexed { i, (icon, text) ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(icon, null, modifier = Modifier.size(16.dp), tint = infoColor)
                         Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMono),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            if (i < info.lastIndex) text + context.getString(R.string.comma) else text,
+                            style = MaterialTheme.typography.bodySmall, color = infoColor,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             }
-        }
 
-        val options = remember(container) {
-            buildList {
-                if (container.disableIPv6) add(context.getString(R.string.ipv6_option))
-                if (container.enableAndroidStorage) add(context.getString(R.string.storage_option))
-                if (container.enableHwAccess) add(context.getString(R.string.hw_option))
-                if (container.enableGpuMode || container.enableHwAccess) add(context.getString(R.string.gpu_option))
-                if (container.enableTermuxX11) add(context.getString(R.string.x11_option))
-                if (container.enableAnland) add(context.getString(R.string.anland_option))
-                if (container.enableVirgl) add(context.getString(R.string.virgl_option))
-                if (container.enablePulseaudio) add(context.getString(R.string.pulseaudio_option))
-                if (container.selinuxPermissive) add(context.getString(R.string.selinux_permissive_option))
-                if (container.allowSandboxing) add(context.getString(R.string.userns_option))
-                if (container.volatileMode) add(context.getString(R.string.volatile_option))
-                if (container.forceCgroupv1) add(context.getString(R.string.cgroup_v1_option))
-                if (container.privileged.isNotEmpty()) add(context.getString(R.string.privileged_option))
-                if (container.customInit.isNotEmpty()) add(context.getString(R.string.custom_init_option))
-                if (container.runAtBoot) add(context.getString(R.string.run_at_boot))
+            // Options Row, depends only on stable container fields, so build once per container.
+            val options = remember(container) {
+                buildList {
+                    if (container.disableIPv6) add(context.getString(R.string.ipv6_option))
+                    if (container.enableAndroidStorage) add(context.getString(R.string.storage_option))
+                    if (container.enableHwAccess) add(context.getString(R.string.hw_option))
+                    if (container.enableGpuMode || container.enableHwAccess) add(context.getString(R.string.gpu_option))
+                    if (container.enableTermuxX11) add(context.getString(R.string.x11_option))
+                    if (container.enableAnland) add(context.getString(R.string.anland_option))
+                    if (container.enableVirgl) add(context.getString(R.string.virgl_option))
+                    if (container.enablePulseaudio) add(context.getString(R.string.pulseaudio_option))
+                    if (container.selinuxPermissive) add(context.getString(R.string.selinux_permissive_option))
+                    if (container.allowSandboxing) add(context.getString(R.string.userns_option))
+                    if (container.volatileMode) add(context.getString(R.string.volatile_option))
+                    if (container.forceCgroupv1) add(context.getString(R.string.cgroup_v1_option))
+                    if (container.privileged.isNotEmpty()) add(context.getString(R.string.privileged_option))
+                    if (container.customInit.isNotEmpty()) add(context.getString(R.string.custom_init_option))
+                    if (container.runAtBoot) add(context.getString(R.string.run_at_boot))
+                }
             }
-        }
-        if (options.isNotEmpty()) {
-            Text(
-                text = options.joinToString("  ·  "),
-                style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMono),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = DsSpace.sm)
-            )
-        }
-
-        DsActionStrip(
-            modifier = Modifier.padding(top = DsSpace.md)
-        ) {
-            DsActionButton(
-                label = if (isRunning) context.getString(R.string.stop) else context.getString(R.string.start),
-                icon = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
-                onClick = if (isRunning) actions.onStop else actions.onStart,
-                enabled = !isOperationRunning,
-                style = if (isRunning) DsButtonStyle.Danger else DsButtonStyle.Filled,
-                modifier = Modifier.weight(1f)
-            )
-            if (isRunning) {
-                DsActionButton(
-                    label = context.getString(R.string.restart),
-                    icon = Icons.Default.Refresh,
-                    onClick = actions.onRestart,
-                    enabled = !isOperationRunning,
-                    style = DsButtonStyle.Tonal,
-                    modifier = Modifier.weight(1f)
-                )
+            if (options.isNotEmpty()) {
+                Text(context.getString(R.string.options_label, options.joinToString(", ")), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
             }
-            DsActionButton(
-                label = if (isExpanded) context.getString(R.string.close) else context.getString(R.string.manage),
-                icon = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                onClick = actions.onToggleExpand,
-                style = DsButtonStyle.Outline,
-                modifier = Modifier.weight(1f)
-            )
-        }
 
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = expandVertically(animationSpec = AnimationUtils.mediumSpec(), expandFrom = Alignment.Top) + fadeIn(),
-            exit = shrinkVertically(animationSpec = AnimationUtils.mediumSpec(), shrinkTowards = Alignment.Top) + fadeOut()
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Spacer(Modifier.height(DsSpace.sm))
-                DsDivider()
-                Spacer(Modifier.height(DsSpace.sm))
-                CardMenuItem(
-                    icon = rememberVectorPainter(Icons.Default.Edit),
-                    label = context.getString(R.string.edit_container_configuration),
-                    tint = MaterialTheme.colorScheme.primary,
-                    onClick = actions.onEdit
-                )
-                if (!container.useSparseImage) {
-                    CardMenuItem(
-                        icon = painterResource(R.drawable.ic_disk),
-                        label = context.getString(R.string.migrate_to_sparse_image),
-                        tint = MaterialTheme.colorScheme.secondary,
-                        onClick = actions.onMigrate
+            // Unified Control Pill
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh, // Depth for secondary actions
+                // The wrapper sits tighter than the 16.dp buttons inside it on purpose.
+                // Matching the two radii flattens the nested look, do not "fix" it.
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+            ) {
+                Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Start/Stop
+                    val isStartEnabled = !container.isRunning && !isOperationRunning
+                    val isStopEnabled = container.isRunning && !isOperationRunning
+                    
+                    val btnColor = if (isStopEnabled) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+                                   else if (isStartEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                    val accentColor = if (isStopEnabled) MaterialTheme.colorScheme.error
+                                      else if (isStartEnabled) MaterialTheme.colorScheme.primary
+                                      else MaterialTheme.colorScheme.outlineVariant
+
+                    Surface(
+                        onClick = if (container.isRunning) actions.onStop else actions.onStart,
+                        enabled = isStartEnabled || isStopEnabled,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = btnColor,
+                        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.2f))
+                    ) {
+                        Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (container.isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                null, modifier = Modifier.size(20.dp),
+                                tint = if (container.isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (container.isRunning) context.getString(R.string.stop) else context.getString(R.string.start),
+                                style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+                                color = if (container.isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    // Restart (Only show if running)
+                    if (container.isRunning) {
+                        val isRestartEnabled = !isOperationRunning
+                        val restartBtnColor = if (isRestartEnabled) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                        val restartAccent = if (isRestartEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant
+
+                        Surface(
+                            onClick = actions.onRestart,
+                            enabled = isRestartEnabled,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = restartBtnColor,
+                            border = BorderStroke(1.dp, restartAccent.copy(alpha = 0.2f))
+                        ) {
+                            Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    context.getString(R.string.restart),
+                                    style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Integrated Expandable Action Drawer (Sealed & Interactive)
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(
+                    animationSpec = AnimationUtils.mediumSpec(),
+                    expandFrom = Alignment.Top
+                ) + fadeIn(),
+                exit = shrinkVertically(
+                    animationSpec = AnimationUtils.mediumSpec(),
+                    shrinkTowards = Alignment.Top
+                ) + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Spacer(Modifier.height(12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    Spacer(Modifier.height(12.dp))
+
+                    ActionItem(
+                        icon = rememberVectorPainter(Icons.Default.Edit),
+                        label = context.getString(R.string.edit_container_configuration),
+                        tint = MaterialTheme.colorScheme.primary,
+                        onClick = actions.onEdit
                     )
-                } else {
-                    CardMenuItem(
-                        icon = painterResource(R.drawable.ic_disk),
-                        label = context.getString(R.string.resize_sparse_image),
-                        tint = MaterialTheme.colorScheme.secondary,
-                        onClick = actions.onResize
+
+                    if (!container.useSparseImage) {
+                        ActionItem(
+                            icon = painterResource(R.drawable.ic_disk),
+                            label = context.getString(R.string.migrate_to_sparse_image),
+                            tint = MaterialTheme.colorScheme.secondary,
+                            onClick = actions.onMigrate
+                        )
+                    } else {
+                        ActionItem(
+                            icon = painterResource(R.drawable.ic_disk),
+                            label = context.getString(R.string.resize_sparse_image),
+                            tint = MaterialTheme.colorScheme.secondary,
+                            onClick = actions.onResize
+                        )
+                    }
+
+                    ActionItem(
+                        icon = rememberVectorPainter(Icons.Default.FileDownload),
+                        label = context.getString(R.string.export_container),
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        onClick = actions.onExport
+                    )
+
+                    ActionItem(
+                        icon = rememberVectorPainter(Icons.Default.Delete),
+                        label = context.getString(R.string.uninstall_container_menu),
+                        tint = MaterialTheme.colorScheme.error,
+                        isBold = true,
+                        onClick = actions.onUninstall
                     )
                 }
-                CardMenuItem(
-                    icon = rememberVectorPainter(Icons.Default.FileDownload),
-                    label = context.getString(R.string.export_container),
-                    tint = MaterialTheme.colorScheme.tertiary,
-                    onClick = actions.onExport
-                )
-                CardMenuItem(
-                    icon = rememberVectorPainter(Icons.Default.Delete),
-                    label = context.getString(R.string.uninstall_container_menu),
-                    tint = MaterialTheme.colorScheme.error,
-                    onClick = actions.onUninstall
-                )
             }
         }
     }
 }
 
 @Composable
-private fun CardMenuItem(
+private fun ActionItem(
     icon: Painter,
     label: String,
     tint: Color,
+    isBold: Boolean = false,
     onClick: () -> Unit
 ) {
-    androidx.compose.material3.Surface(
+    Surface(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp),
+        modifier = Modifier.fillMaxWidth().height(52.dp),
+        shape = RoundedCornerShape(12.dp),
         color = Color.Transparent
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = DsSpace.sm),
+            modifier = Modifier.padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(DsSpace.md)
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+            Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = if (tint == MaterialTheme.colorScheme.error) tint else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                fontWeight = if (isBold) FontWeight.Bold else FontWeight.Medium,
+                color = if (isBold) tint else MaterialTheme.colorScheme.onSurface
             )
         }
     }
