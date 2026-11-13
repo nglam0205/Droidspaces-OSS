@@ -33,19 +33,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Settle Version
-        run: |
-          VERSION=$(grep 'DS_VERSION' src/include/droidspace.h | awk '{print $3}' | tr -d '"')
-
-          if [ -n "$TAG" ]; then
-            [ "${TAG#v}" = "$VERSION" ] || {
-              echo "Tag $TAG does not match DS_VERSION $VERSION"
-              exit 1
-            }
-          fi
-
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-
+      
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
