@@ -493,7 +493,10 @@ private fun AboutDialog(onDismiss: () -> Unit) {
             }
 
             SectionHeader(text = context.getString(R.string.contributors))
-            val contributors = remember { ContributorManager.load(context) }
+            // Reading the asset and its base64 avatars belongs off the frame.
+            val contributors by produceState(initialValue = emptyList<com.droidspaces.app.util.Contributor>()) {
+                value = withContext(Dispatchers.IO) { ContributorManager.load(context) }
+            }
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
@@ -503,18 +506,27 @@ private fun AboutDialog(onDismiss: () -> Unit) {
                 Column {
                     contributors.forEachIndexed { index, contributor ->
                         if (index > 0) GroupDivider()
-                        val avatar = remember(contributor.avatarB64) {
-                            if (contributor.avatarB64.isNotEmpty()) runCatching {
-                                val bytes = Base64.decode(contributor.avatarB64, Base64.DEFAULT)
-                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                            }.getOrNull() else null
+                        // Decoding a PNG from base64 is disk-sized work; doing it
+                        // during composition stalled the settings frame for every
+                        // contributor at once.
+                        val avatar by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
+                            initialValue = null,
+                            key1 = contributor.avatarB64
+                        ) {
+                            value = if (contributor.avatarB64.isEmpty()) null else withContext(Dispatchers.IO) {
+                                runCatching {
+                                    val bytes = Base64.decode(contributor.avatarB64, Base64.DEFAULT)
+                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                                }.getOrNull()
+                            }
                         }
                         LinkRow(
                             contributor.githubUrl,
                             contributor.login,
                             context.resources.getQuantityString(R.plurals.commit_count, contributor.commits, contributor.commits)
                         ) {
-                            if (avatar != null) Image(avatar, contentDescription = null, modifier = Modifier.size(28.dp).clip(CircleShape))
+                            val avatarBitmap = avatar
+                            if (avatarBitmap != null) Image(avatarBitmap, contentDescription = null, modifier = Modifier.size(28.dp).clip(CircleShape))
                             else Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }

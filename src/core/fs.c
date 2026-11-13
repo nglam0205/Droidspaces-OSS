@@ -230,6 +230,15 @@ int count_folders(const char *path) {
     if (base_len + 1 + strlen(entry->d_name) >= sizeof(fullpath))
       continue;
 
+    /* d_type is filled in on /data's ext4/f2fs, so the stat is only needed
+     * where the filesystem cannot tell us. A status tick sweeps this dir. */
+    if (entry->d_type == DT_DIR) {
+      count++;
+      continue;
+    }
+    if (entry->d_type != DT_UNKNOWN && entry->d_type != DT_LNK)
+      continue;
+
     snprintf(fullpath, sizeof(fullpath), "%s/%s", path, entry->d_name);
 
     if (stat(fullpath, &st) == 0 && S_ISDIR(st.st_mode))

@@ -34,6 +34,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.buildAnnotatedString
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.droidspaces.app.ui.component.DsSnackbarHost
+import com.droidspaces.app.ui.component.DsSearchBar
 import com.droidspaces.app.ui.util.ProgressDialog
 import com.droidspaces.app.ui.util.FullScreenLoading
 import com.droidspaces.app.ui.util.ErrorLogsDialog
@@ -77,6 +79,9 @@ import androidx.compose.ui.draw.clip
 import com.droidspaces.app.R
 import com.droidspaces.app.ui.theme.DsIcons
 import androidx.compose.ui.window.Dialog
+
+/** Long lists get a search field; short ones stay uncluttered. */
+private const val SEARCH_THRESHOLD = 6
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -151,8 +156,20 @@ fun ContainersScreen(
 
     // Get containers from ViewModel - single source of truth (KernelSU pattern)
     val containers = containerViewModel.containerList
+
+    // A search field for the long lists, out of the way for the common short one.
+    // A query that is still set keeps it visible even if the list shrinks.
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val trimmedQuery = searchQuery.trim()
+    val visibleContainers = remember(containers, trimmedQuery) {
+        if (trimmedQuery.isEmpty()) containers
+        else containers.filter {
+            it.name.contains(trimmedQuery, ignoreCase = true) ||
+                it.hostname.contains(trimmedQuery, ignoreCase = true)
+        }
+    }
     // Removed cards stay here until they finish leaving, so the empty state waits for them.
-    val entries = rememberAnimatedEntries(containers) { it.name }
+    val entries = rememberAnimatedEntries(visibleContainers) { it.name }
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -168,7 +185,9 @@ fun ContainersScreen(
             !isKernelSupported -> {
                 KernelUnsupportedState(modifier = Modifier.padding(bottom = bottomBarInset))
             }
-            entries.isEmpty() -> {
+            // Only once the exit animations have drained as well, so a
+            // removed card leaves instead of vanishing.
+            entries.isEmpty() && containers.isEmpty() -> {
                 if (containerViewModel.isRefreshing) {
                     FullScreenLoading(modifier = Modifier.padding(bottom = bottomBarInset))
                 } else {
@@ -183,82 +202,102 @@ fun ContainersScreen(
                 }
             }
             else -> {
-                // Show container cards
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .combinedClickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null,
-                            onClick = {
-                                onExpandedContainerNameChange(null)
-                                fabMenuExpanded = false
-                            }
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (containers.size >= SEARCH_THRESHOLD || searchQuery.isNotEmpty()) {
+                        DsSearchBar(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            placeholder = stringResource(R.string.search) + "...",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
-                        .padding(horizontal = 16.dp),
-                    // Each card carries its own 16dp gap (AnimatedListEntry) on top of this
-                    contentPadding = PaddingValues(top = 8.dp, bottom = bottomBarInset + 16.dp),
-                ) {
-                    items(entries, key = { it.key }) { entry ->
-                        val container = entry.item
-                        // Console button is always visible - logs persist for each container
-                        val isRunning = opsViewModel.runningOperationContainer == container.name
-                        fun run(op: String) = scope.launch {
-                            opsViewModel.executeOperation(
-                                container, op,
-                                onRefresh = { containerViewModel.refresh() },
-                                onClearUsage = { systemStatsViewModel.clearContainerUsage(it) },
-                                onFailureSnackbar = { scope.showError(snackbarHostState, it) }
-                            )
-                        }
-
-                        AnimatedListEntry(entry) {
-                            ContainerCard(
-                                container = container,
-                                isOperationRunning = isRunning,
-                                isExpanded = expandedContainerName == container.name,
-                                actions = ContainerCardActions(
-                                onToggleExpand = {
-                                    onExpandedContainerNameChange(if (expandedContainerName == container.name) null else container.name)
-                                },
-                                 onShowLogs = {
-                                    opsViewModel.showLogViewerFor = container.name
-                                },
-                                onStart = { run("start") },
-                                onStop = { run("stop") },
-                                onRestart = { run("restart") },
-                                onEdit = {
-                                    onExpandedContainerNameChange(null)
-                                    onNavigateToEditContainer(container.name)
-                                },
-                                onEnter = {
-                                    onNavigateToContainerDetails(container.name)
-                                },
-                                onUninstall = {
-                                    onExpandedContainerNameChange(null)
-                                    showUninstallConfirmation = container
-                                },
-                                onMigrate = {
-                                    onExpandedContainerNameChange(null)
-                                    pendingSparseOperation = container to SparseOp.MIGRATE
-                                },
-                                onResize = {
-                                    onExpandedContainerNameChange(null)
-                                    pendingSparseOperation = container to SparseOp.RESIZE
-                                },
-                                onExport = {
-                                    onExpandedContainerNameChange(null)
-                                    // Only a container with env vars has something to decide.
-                                    if (ValidationUtils.countEnvVars(container.envFileContent) > 0) {
-                                        askExportEnv = container
-                                    } else {
-                                        pendingExportEnv = false
-                                        pendingExportContainer = container
-                                        exportFileLauncher.launch(exportFileName(container))
+                    }
+                    if (visibleContainers.isEmpty()) {
+                        EmptyState(
+                            icon = Icons.Default.Search,
+                            title = stringResource(R.string.no_matches),
+                            description = "\"$trimmedQuery\"",
+                            modifier = Modifier.weight(1f).padding(bottom = bottomBarInset)
+                        )
+                    } else {
+                        // Show container cards
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .combinedClickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        onExpandedContainerNameChange(null)
+                                        fabMenuExpanded = false
                                     }
-                                }
                                 )
-                            )
+                                .padding(horizontal = 16.dp),
+                            // Each card carries its own 16dp gap (AnimatedListEntry) on top of this
+                            contentPadding = PaddingValues(top = 8.dp, bottom = bottomBarInset + 16.dp),
+                        ) {
+                            items(entries, key = { it.key }) { entry ->
+                                val container = entry.item
+                                // Console button is always visible - logs persist for each container
+                                val isRunning = opsViewModel.runningOperationContainer == container.name
+                                fun run(op: String) = scope.launch {
+                                    opsViewModel.executeOperation(
+                                        container, op,
+                                        onRefresh = { containerViewModel.refresh() },
+                                        onClearUsage = { systemStatsViewModel.clearContainerUsage(it) },
+                                        onFailureSnackbar = { scope.showError(snackbarHostState, it) }
+                                    )
+                                }
+
+                                AnimatedListEntry(entry) {
+                                    ContainerCard(
+                                        container = container,
+                                        isOperationRunning = isRunning,
+                                        isExpanded = expandedContainerName == container.name,
+                                        actions = ContainerCardActions(
+                                        onToggleExpand = {
+                                            onExpandedContainerNameChange(if (expandedContainerName == container.name) null else container.name)
+                                        },
+                                         onShowLogs = {
+                                            opsViewModel.showLogViewerFor = container.name
+                                        },
+                                        onStart = { run("start") },
+                                        onStop = { run("stop") },
+                                        onRestart = { run("restart") },
+                                        onEdit = {
+                                            onExpandedContainerNameChange(null)
+                                            onNavigateToEditContainer(container.name)
+                                        },
+                                        onEnter = {
+                                            onNavigateToContainerDetails(container.name)
+                                        },
+                                        onUninstall = {
+                                            onExpandedContainerNameChange(null)
+                                            showUninstallConfirmation = container
+                                        },
+                                        onMigrate = {
+                                            onExpandedContainerNameChange(null)
+                                            pendingSparseOperation = container to SparseOp.MIGRATE
+                                        },
+                                        onResize = {
+                                            onExpandedContainerNameChange(null)
+                                            pendingSparseOperation = container to SparseOp.RESIZE
+                                        },
+                                        onExport = {
+                                            onExpandedContainerNameChange(null)
+                                            // Only a container with env vars has something to decide.
+                                            if (ValidationUtils.countEnvVars(container.envFileContent) > 0) {
+                                                askExportEnv = container
+                                            } else {
+                                                pendingExportEnv = false
+                                                pendingExportContainer = container
+                                                exportFileLauncher.launch(exportFileName(container))
+                                            }
+                                        }
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }

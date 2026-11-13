@@ -73,12 +73,11 @@ static int addr_append(char *buf, size_t size, size_t *pos, const char *ip) {
 /* Addresses of the container's netns, comma separated: IPv4 without loopback,
  * IPv6 without loopback and link-local. Host-mode containers share our netns,
  * so setns() is a no-op there. */
-static void netns_addrs(pid_t pid, char *v4, size_t v4_size, char *v6,
-                        size_t v6_size) {
+static void netns_addrs(pid_t pid, int self_fd, char *v4, size_t v4_size,
+                        char *v6, size_t v6_size) {
   v4[0] = v6[0] = '\0';
   char path[PATH_MAX];
   snprintf(path, sizeof(path), "/proc/%d/ns/net", (int)pid);
-  int self_fd = open("/proc/self/ns/net", O_RDONLY | O_CLOEXEC);
   int ns_fd = open(path, O_RDONLY | O_CLOEXEC);
   if (self_fd >= 0 && ns_fd >= 0 && setns(ns_fd, CLONE_NEWNET) == 0) {
     struct ifaddrs *ifa = NULL;
@@ -106,8 +105,6 @@ static void netns_addrs(pid_t pid, char *v4, size_t v4_size, char *v6,
     }
     setns(self_fd, CLONE_NEWNET);
   }
-  if (self_fd >= 0)
-    close(self_fd);
   if (ns_fd >= 0)
     close(ns_fd);
 }
@@ -123,22 +120,22 @@ static long long proc_cpu_ticks(pid_t pid) {
 }
 
 static long proc_rss_kb(const char *pid_name) {
-  char path[PATH_MAX];
-  snprintf(path, sizeof(path), "/proc/%s/status", pid_name);
-  FILE *f = fopen(path, "r");
-  if (!f)
+  char path[PATH_MAX], buf[128];
+  snprintf(path, sizeof(path), "/proc/%s/statm", pid_name);
+  if (read_file(path, buf, sizeof(buf)) <= 0)
     return 0;
-  long rss = 0;
-  char line[128];
-  while (fgets(line, sizeof(line), f)) {
-    if (strncmp(line, "VmRSS:", 6) == 0) {
-      if (sscanf(line + 6, "%ld", &rss) != 1)
-        rss = 0;
-      break;
-    }
+  /* "size resident shared text lib data dt": resident is what VmRSS in
+   * status sums, but statm is one line instead of a full status scan. */
+  char *p = strchr(buf, ' ');
+  long pages = p ? strtol(p + 1, NULL, 10) : 0;
+  if (pages <= 0)
+    return 0;
+  static long page_kb = 0;
+  if (page_kb == 0) {
+    long sz = sysconf(_SC_PAGESIZE);
+    page_kb = sz > 1024 ? sz / 1024 : 4;
   }
-  fclose(f);
-  return rss;
+  return pages * page_kb;
 }
 
 static long long host_cpu_ticks(void) {
@@ -214,6 +211,9 @@ long ds_collect_status(struct ds_status *st, int n) {
     return ram_total;
   }
 
+  int self_net_fd = open("/proc/self/ns/net", O_RDONLY | O_CLOEXEC);
+  long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
+
   for (int i = 0; i < n; i++) {
     char path[PATH_MAX];
     st[i].ram_used_kb = 0;
@@ -223,7 +223,7 @@ long ds_collect_status(struct ds_status *st, int n) {
     if (build_proc_root_path(st[i].pid, "/etc/os-release", path,
                              sizeof(path)) == 0)
       get_os_pretty(path, st[i].os, sizeof(st[i].os));
-    netns_addrs(st[i].pid, st[i].ip, sizeof(st[i].ip), st[i].ip6,
+    netns_addrs(st[i].pid, self_net_fd, st[i].ip, sizeof(st[i].ip), st[i].ip6,
                 sizeof(st[i].ip6));
     /* An unreadable link leaves ns[i] empty, which no process can match. */
     snprintf(path, sizeof(path), "/proc/%d/ns/pid", (int)st[i].pid);
@@ -267,12 +267,13 @@ long ds_collect_status(struct ds_status *st, int n) {
                          &swap_capped);
     st[i].ram_limit_kb = (long)(lim_mem / 1024);
     st[i].swap_allowed = !swap_capped;
-    long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
     long cpu_lim =
         quota > 0 && ncpu > 0 ? (long)(quota * 1000 / (period * ncpu)) : 0;
     st[i].cpu_limit_permill = cpu_lim > 1000 ? 1000 : cpu_lim;
   }
 
+  if (self_net_fd >= 0)
+    close(self_net_fd);
   free(ns);
   free(t1);
   free(t2);

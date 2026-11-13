@@ -192,7 +192,9 @@ class AppStateViewModel(application: Application) : AndroidViewModel(application
 
         if (!isAtomicUpdate) {
             // Clean Slate: Remove the old module, but NEVER the bin directory.
-            Shell.cmd("rm -rf '/data/adb/modules/droidspaces' 2>&1").exec()
+            withContext(Dispatchers.IO) {
+                Shell.cmd("rm -rf '/data/adb/modules/droidspaces' 2>&1").exec()
+            }
         }
 
         // Step 2: Install binaries (atomic mv to canonical path)

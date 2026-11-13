@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 
 /**
@@ -20,6 +22,12 @@ object ContainerOSInfoManager {
     // Written from the IO polling loop and read from the main thread; a plain
     // HashMap had no ordering between the two.
     private val cache = java.util.concurrent.ConcurrentHashMap<String, OSInfo>()
+
+    // Shared by the panel's and the details screen's polls. See fetchAll().
+    private const val FETCH_TTL_MS = 750L
+    private val fetchLock = Mutex()
+    private var lastFetchAt = 0L
+    private var lastFetch: Map<String, OSInfo> = emptyMap()
 
     // What the last persistent write held. fetchAll runs every two seconds, and
     // commit() is a synchronous disk write, so rewriting the same identity fields
@@ -103,12 +111,33 @@ object ContainerOSInfoManager {
     /**
      * One `show --json` round trip: live status of every running container, keyed by
      * name. A container missing from the result is not running.
+     *
+     * The panel and the details screen poll on their own timers, and their ticks
+     * overlap often enough that both used to run a full `show` (a 250 ms CPU
+     * sample in the backend). Concurrent callers now share one result, and a
+     * result younger than [FETCH_TTL_MS] is reused as is.
      */
     suspend fun fetchAll(appContext: Context): Map<String, OSInfo> = withContext(Dispatchers.IO) {
+        fetchLock.withLock {
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now - lastFetchAt < FETCH_TTL_MS) return@withLock lastFetch
+            val fresh = fetchAllOnce(appContext)
+            if (fresh != null) {
+                lastFetchAt = android.os.SystemClock.elapsedRealtime()
+                lastFetch = fresh
+                fresh
+            } else {
+                emptyMap()
+            }
+        }
+    }
+
+    /** Null when the round trip failed, so a failure is never cached as "nothing runs". */
+    private fun fetchAllOnce(appContext: Context): Map<String, OSInfo>? {
         context = appContext.applicationContext
-        try {
+        return try {
             val result = Shell.cmd(ContainerCommandBuilder.buildShowCommand()).exec()
-            if (!result.isSuccess) return@withContext emptyMap()
+            if (!result.isSuccess) return null
             val root = JSONObject(result.out.joinToString(""))
             val ramTotalKb = root.optLong("ram_total_kb")
             val running = root.getJSONArray("running")
@@ -123,7 +152,7 @@ object ContainerOSInfoManager {
             out
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching container status", e)
-            emptyMap()
+            null
         }
     }
 

@@ -1,8 +1,8 @@
 package com.droidspaces.app.ui.screen
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -106,15 +106,14 @@ fun ControlPanelScreen(
                         modifier = Modifier.padding(bottom = bottomBarInset)
                     )
                 } else {
-                    Column(
+                    LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp)
-                            // Each card carries its own 16dp gap (AnimatedListEntry) on top of this
-                            .padding(top = 8.dp, bottom = bottomBarInset + 16.dp),
+                            .padding(horizontal = 16.dp),
+                        // Each card carries its own 16dp gap (AnimatedListEntry) on top of this
+                        contentPadding = PaddingValues(top = 8.dp, bottom = bottomBarInset + 16.dp),
                     ) {
-                        entries.forEach { entry ->
+                        items(entries, key = { it.key }) { entry ->
                             val container = entry.item
                             // The heartbeat reports the broker's socket or x11 only for a container
                             // booted with that display, so it gates the pill, not the saved config.
@@ -124,29 +123,26 @@ fun ControlPanelScreen(
                                 containerUsageMap[container.name]?.x11 == true -> context.getString(R.string.termux_x11_option) to painterResource(R.drawable.ic_x11)
                                 else -> null to null
                             }
-                            // Keyed, so a card's state stays with its container when one leaves.
-                            key(entry.key) {
-                                AnimatedListEntry(entry) {
-                                    RunningContainerCard(
-                                        container = container,
-                                        onEnter = {
-                                            onNavigateToContainerDetails(container.name)
-                                        },
-                                        onTerminalClick = {
-                                            onNavigateToTerminal(container.name)
-                                        },
-                                        displayLabel = displayLabel,
-                                        displayIcon = displayIcon,
-                                        onLaunchDisplay = {
-                                            if (anlandSock != null) {
-                                                if (!AnlandUtils.launchWindow(context, container.name, anlandSock))
-                                                    scope.showError(snackbarHostState, context.getString(R.string.anland_not_installed))
-                                            } else if (!TermuxX11Utils.launch(context))
-                                                scope.showError(snackbarHostState, context.getString(R.string.termux_x11_not_installed))
-                                        },
-                                        osInfo = containerUsageMap[container.name],
-                                    )
-                                }
+                            AnimatedListEntry(entry) {
+                                RunningContainerCard(
+                                    container = container,
+                                    onEnter = {
+                                        onNavigateToContainerDetails(container.name)
+                                    },
+                                    onTerminalClick = {
+                                        onNavigateToTerminal(container.name)
+                                    },
+                                    displayLabel = displayLabel,
+                                    displayIcon = displayIcon,
+                                    onLaunchDisplay = {
+                                        if (anlandSock != null) {
+                                            if (!AnlandUtils.launchWindow(context, container.name, anlandSock))
+                                                scope.showError(snackbarHostState, context.getString(R.string.anland_not_installed))
+                                        } else if (!TermuxX11Utils.launch(context))
+                                            scope.showError(snackbarHostState, context.getString(R.string.termux_x11_not_installed))
+                                    },
+                                    osInfo = containerUsageMap[container.name],
+                                )
                             }
                         }
                     }

@@ -13,7 +13,6 @@ int show_containers(struct ds_config *cfg) {
   char container_dir[1024];
   snprintf(container_dir, sizeof(container_dir), "%s/%s", get_workspace_dir(),
            DS_CONTAINERS_DIR);
-  int totalcount = count_folders(container_dir);
 
   int count = 0;
   int cap = 32;
@@ -77,6 +76,9 @@ int show_containers(struct ds_config *cfg) {
     closedir(d);
 
   if (cfg->json_output) {
+    /* Only the JSON payload carries the installed count, so a terminal
+     * `show` no longer sweeps the Containers directory for nothing. */
+    int totalcount = count_folders(container_dir);
     long ram_total = ds_collect_status(containers, count);
     printf("{\"total\":%d,\"ram_total_kb\":%ld,\"running\":[", totalcount,
            ram_total);

@@ -1,11 +1,14 @@
 package com.droidspaces.app.util
 
 import android.content.Context
+import android.util.Log
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
+import org.json.JSONObject
 import java.io.File
+import java.util.UUID
 
 enum class ContainerStatus {
     RUNNING,
@@ -224,18 +227,134 @@ object ContainerManager {
     /**
      * List all installed containers by scanning the containers directory.
      * Returns a list of ContainerInfo objects.
+     *
+     * One root shell holds the whole sweep: every config, every .env and one
+     * `show --json` for the live status. It used to be one shell per container
+     * for the config, one for the .env and one for the pid, which on a phone
+     * with ten containers meant thirty su round trips per refresh. The files are
+     * read with shell builtins so the batch does not fork `cat` either.
+     *
+     * A container the status call does not name is stopped. That call walks the
+     * Pids directory the same way the old per-container probe did, including its
+     * lost-pidfile recovery, so only a pidfile that vanished with no scan since
+     * reads as stopped; pull-to-refresh runs `scan` and recovers those.
      */
     suspend fun listContainers(): List<ContainerInfo> = withContext(Dispatchers.IO) {
-        // ls fails on a missing or empty directory, which is the "no containers" answer.
-        val listResult = Shell.cmd("ls -d \"$CONTAINERS_BASE_PATH\"/*/ 2>/dev/null").exec()
-        if (!listResult.isSuccess) return@withContext emptyList()
-        listResult.out.mapNotNull { line ->
-            // /data/local/Droidspaces/Containers/<sanitized name>/
-            val trimmed = line.trim()
-            if (!trimmed.startsWith(CONTAINERS_BASE_PATH)) return@mapNotNull null
-            val sanitizedName = trimmed.removeSuffix("/").substringAfterLast("/")
-            if (sanitizedName.isEmpty()) null else getContainerInfo(sanitizedName)
+        val batch = readContainerBatch() ?: return@withContext emptyList()
+        // A missing status section means `show` never answered (daemon down,
+        // old backend). Probe each container the old way instead of reporting
+        // the whole list as stopped.
+        val livePids = batch.statusJson?.let(::parseShowPids)
+
+        batch.entries.mapNotNull { entry ->
+            val config = parseConfig(entry.config, entry.dirName, loadEnvironment = false)
+                ?: return@mapNotNull null
+            val pid = livePids?.get(config.name)
+                ?: if (livePids == null) checkContainerStatus(config.name).second else null
+            config.copy(
+                status = if (pid != null) ContainerStatus.RUNNING else ContainerStatus.STOPPED,
+                pid = pid,
+                envFileContent = entry.env
+            )
         }
+    }
+
+    private data class BatchEntry(val dirName: String, val config: String, val env: String?)
+
+    private class ContainerBatch(val entries: List<BatchEntry>, val statusJson: String?)
+
+    /**
+     * Reads every container's config and .env, plus `show --json`, in one shell.
+     * Sections are delimited by a random marker so a config line can never be
+     * mistaken for one; each content line also carries a C or E prefix.
+     */
+    private fun readContainerBatch(): ContainerBatch? {
+        val marker = "DSB" + UUID.randomUUID().toString().replace("-", "")
+        val result = Shell.cmd(buildBatchCommand(marker)).exec()
+
+        val entries = ArrayList<BatchEntry>()
+        val status = StringBuilder()
+        var dirName: String? = null
+        var config: MutableList<String>? = null
+        var env: MutableList<String>? = null
+        var inStatus = false
+
+        fun flush() {
+            val name = dirName ?: return
+            val lines = config.orEmpty()
+            // An absent or zero-byte config was skipped by the old per-container read.
+            if (lines.isNotEmpty()) {
+                entries.add(
+                    BatchEntry(
+                        name,
+                        lines.joinToString("\n"),
+                        env?.takeIf { it.isNotEmpty() }?.joinToString("\n")
+                    )
+                )
+            }
+            dirName = null
+            config = null
+            env = null
+        }
+
+        for (line in result.out) {
+            when {
+                inStatus -> {
+                    if (status.isNotEmpty()) status.append('\n')
+                    status.append(line)
+                }
+                line == "$marker ENV" -> env = ArrayList()
+                line == "$marker STATUS" -> {
+                    flush()
+                    inStatus = true
+                }
+                line.startsWith("$marker DIR ") -> {
+                    flush()
+                    dirName = line.removePrefix("$marker DIR ")
+                    config = ArrayList()
+                }
+                dirName != null && line.startsWith("C") -> config?.add(line.substring(1))
+                dirName != null && line.startsWith("E") -> env?.add(line.substring(1))
+            }
+        }
+        flush()
+
+        // Nothing at all and a failed command is the old "ls failed" answer.
+        if (entries.isEmpty() && !result.isSuccess) return null
+        return ContainerBatch(entries, status.toString().ifEmpty { null })
+    }
+
+    /** The running containers' init pids, or null when the JSON cannot be trusted. */
+    private fun parseShowPids(json: String): Map<String, Int>? = try {
+        val running = JSONObject(json).getJSONArray("running")
+        buildMap {
+            for (i in 0 until running.length()) {
+                val obj = running.getJSONObject(i)
+                val pid = obj.optInt("pid")
+                val name = obj.optString("name")
+                if (pid > 0 && name.isNotEmpty()) put(name, pid)
+            }
+        }
+    } catch (e: Exception) {
+        Log.w("ContainerManager", "show --json unreadable, probing status per container", e)
+        null
+    }
+
+    private fun buildBatchCommand(marker: String): String = buildString {
+        val base = ContainerCommandBuilder.quote(CONTAINERS_BASE_PATH)
+        append("m=").append(marker).append('\n')
+        append("for d in ").append(base).append("/*/; do\n")
+        append("  [ -d \"\$d\" ] || continue\n")
+        append("  n=\${d%/}; n=\${n##*/}\n")
+        append("  printf '%s DIR %s\\n' \"\$m\" \"\$n\"\n")
+        append("  f=\${d}").append(Constants.CONTAINER_CONFIG_FILE).append('\n')
+        append("  if [ -f \"\$f\" ]; then while IFS= read -r l || [ -n \"\$l\" ]; do printf 'C%s\\n' \"\$l\"; done < \"\$f\"; fi\n")
+        append("  printf '%s ENV\\n' \"\$m\"\n")
+        append("  f=\${d}.env\n")
+        append("  if [ -f \"\$f\" ]; then while IFS= read -r l || [ -n \"\$l\" ]; do printf 'E%s\\n' \"\$l\"; done < \"\$f\"; fi\n")
+        append("done\n")
+        append("printf '%s STATUS\\n' \"\$m\"\n")
+        append(ContainerCommandBuilder.buildShowCommand()).append(" 2>/dev/null")
     }
 
     /** Every non-blank line of a command's output to the logger, stdout as info, stderr as error. */
@@ -294,16 +413,27 @@ object ContainerManager {
      */
     suspend fun readRootfsPath(name: String): String? = withContext(Dispatchers.IO) {
         val configPath = "${getContainerDirectory(name)}/${Constants.CONTAINER_CONFIG_FILE}"
-        loadContainerConfig(configPath, name)?.rootfsPath?.takeIf { it.isNotBlank() }
+        // Only the rootfs path is wanted here; reading .env as well cost this
+        // call an extra root shell for nothing.
+        loadContainerConfig(configPath, name, loadEnvironment = false)
+            ?.rootfsPath?.takeIf { it.isNotBlank() }
     }
 
     /**
      * Load container configuration from config file.
      */
-    private fun loadContainerConfig(configPath: String, defaultName: String): ContainerInfo? {
+    private fun loadContainerConfig(
+        configPath: String,
+        defaultName: String,
+        loadEnvironment: Boolean = true
+    ): ContainerInfo? {
         val readResult = Shell.cmd("cat ${ContainerCommandBuilder.quote(configPath)} 2>/dev/null").exec()
         if (!readResult.isSuccess || readResult.out.isEmpty()) return null
-        return parseConfig(readResult.out.joinToString("\n"), defaultName)
+        return parseConfig(
+            readResult.out.joinToString("\n"),
+            defaultName,
+            loadEnvironment = loadEnvironment
+        )
     }
 
     /**
