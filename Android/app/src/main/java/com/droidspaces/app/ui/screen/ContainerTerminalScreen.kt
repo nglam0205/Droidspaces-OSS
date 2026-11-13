@@ -420,32 +420,6 @@ fun ContainerTerminalScreen(
         }
     }
     }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = paddingValues.calculateTopPadding())
-                .background(if (terminalDarkTheme) Color.Black else MaterialTheme.colorScheme.surface)
-        ) {
-            if (binder == null || tabs.isEmpty()) {
-                FullScreenLoading(size = LoadingSize.Medium)
-            } else {
-                tabs.forEach { tab ->
-                    key(tab.id) {
-                        TerminalTabView(
-                            tab = tab,
-                            binder = binder!!,
-                            containerName = containerName,
-                            isVisible = tab.id == activeTabId,
-                            activity = activity,
-                            onSessionFinished = { closeTab(tab) },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable
