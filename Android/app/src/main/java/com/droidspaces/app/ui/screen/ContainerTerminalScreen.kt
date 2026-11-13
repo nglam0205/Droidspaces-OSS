@@ -310,54 +310,70 @@ fun ContainerTerminalScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 tabs.forEach { tab ->
-                    val selected = tab.id == activeTabId
+    val selected = tab.id == activeTabId
 
-                    Surface(
-                        onClick = { activeTabId = tab.id },
-                        modifier = Modifier.height(32.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.primaryContainer
+    Surface(
+        onClick = { activeTabId = tab.id },
+        modifier = Modifier
+            .height(36.dp)
+            .width(if (selected) 144.dp else 80.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        tonalElevation = 0.dp,
+        border = BorderStroke(
+            1.dp,
+            if (selected) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 10.dp, end = if (selected) 4.dp else 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = tab.user,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+
+            if (selected) {
+                IconButton(
+                    onClick = {
+                        if (confirmTabClose) {
+                            tabPendingClose = tab
                         } else {
-                            Color.Transparent
-                        },
-                        tonalElevation = 0.dp
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(start = 8.dp, end = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = tab.user,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.widthIn(max = 72.dp)
-                            )
-
-                            IconButton(
-                                onClick = {
-                                    if (confirmTabClose) {
-                                        tabPendingClose = tab
-                                    } else {
-                                        closeTab(tab)
-                                    }
-                                },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Close session",
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                            closeTab(tab)
                         }
-                    }
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close session",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        }
+    }
+                }
                 }
             }
 
