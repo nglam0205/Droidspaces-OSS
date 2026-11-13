@@ -1,4 +1,5 @@
 package com.droidspaces.app.ui.screen
+
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -13,6 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -21,325 +24,197 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.activity.compose.BackHandler
-import com.droidspaces.app.ui.component.DroidspacesStatus
-import com.droidspaces.app.ui.component.DroidspacesStatusCard
-import com.droidspaces.app.ui.component.SystemInfoCard
-import com.droidspaces.app.util.DroidspacesBackendStatus
-import com.droidspaces.app.util.SystemInfoManager
-import com.droidspaces.app.ui.viewmodel.AppStateViewModel
-import com.droidspaces.app.ui.viewmodel.ContainerViewModel
-import com.droidspaces.app.ui.component.HelpCard
-import com.droidspaces.app.util.AppUpdateInfo
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.droidspaces.app.R
-import com.droidspaces.app.ui.theme.DsIcons
-import com.droidspaces.app.util.HostCapabilities
-import androidx.compose.runtime.collectAsState
-import com.droidspaces.app.util.Constants
+import com.droidspaces.app.ui.component.*
+import com.droidspaces.app.ui.theme.JetBrainsMono
+import com.droidspaces.app.util.ContainerManager
+import com.droidspaces.app.util.SystemInfoManager
+import com.droidspaces.app.util.ResourceLimits
+import com.droidspaces.app.viewmodel.AppStateViewModel
+import com.droidspaces.app.viewmodel.ContainerListViewModel
+import com.droidspaces.app.viewmodel.SystemStatsViewModel
+import java.io.File
+import java.util.Locale
 
-private const val EASTER_EGG_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-
-enum class TabItem(val titleResId: Int, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Home(R.string.home_title, Icons.Default.Home),
-    Containers(R.string.containers, DsIcons.Logo),
-    ControlPanel(R.string.panel, Icons.Default.Dashboard)
-}
-
-/**
- * Backend is only checked on:
- * 1. Cold app start
- * 2. Pull-to-refresh
- * 3. Post-installation (when returning from installation flow)
- */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainTabScreen(
-    appStateViewModel: AppStateViewModel,
-    containerViewModel: ContainerViewModel,
-    skipInitialRefresh: Boolean = false,
-    requestedTab: TabItem? = null,
-    onRequestedTabConsumed: () -> Unit = {},
-    onNavigateToSettings: () -> Unit = {},
-    onNavigateToInstallation: () -> Unit = {},
-    onNavigateToContainerInstallation: (android.net.Uri) -> Unit = {},
-    onNavigateToEditContainer: (String) -> Unit = {},
-    onNavigateToContainerDetails: (String) -> Unit = {},
-    onNavigateToTerminal: (String) -> Unit = {},
+    onNavigateToSettings: () -> Unit,
+    onNavigateToDetails: (String) -> Unit,
+    onNavigateToTerminal: (String) -> Unit,
+    onNavigateToNewContainer: () -> Unit,
+    onNavigateToControlPanel: () -> Unit,
+    onNavigateToRequirements: () -> Unit,
+    onNavigateToContributors: () -> Unit,
+    appStateViewModel: AppStateViewModel = viewModel(),
+    containerListViewModel: ContainerListViewModel = viewModel(),
+    systemStatsViewModel: SystemStatsViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // containerViewModel is now passed as parameter to ensure sharing
-
-
-    val tabs = remember { TabItem.values() }
-    val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabs.size })
-
-    // Read once here and handed down as a Boolean, so Home, Containers and the
-    // Panel can never disagree. Unknown counts as supported until the probe lands.
-    val caps by HostCapabilities.state.collectAsState()
-    val isKernelSupported = caps?.requirementsMet != false
-    val selectedTab = tabs[pagerState.currentPage]
-
-    // Jump to the tab requested by a launcher shortcut, then clear the request.
-    LaunchedEffect(requestedTab) {
-        val target = requestedTab ?: return@LaunchedEffect
-        val index = tabs.indexOf(target)
-        if (index >= 0) {
-            pagerState.scrollToPage(index)
-        }
-        onRequestedTabConsumed()
-    }
-
-    // Track which container has its action drawer expanded (hoisted for global collapse)
-    var expandedContainerName by rememberSaveable { mutableStateOf<String?>(null) }
-
-    // Handle back press - return to Home tab if not already there
-    BackHandler(enabled = selectedTab != TabItem.Home) {
-        scope.launch {
-            pagerState.scrollToPage(tabs.indexOf(TabItem.Home))
-        }
-    }
-
-    // Track if we've already triggered initial load in this session
-    var hasTriggeredInitialLoad by rememberSaveable { mutableStateOf(false) }
-
-    // Initial setup - only runs ONCE per app session
-    // DO NOT use hasTriggeredInitialLoad as a key, because changing it cancels the effect!
-    LaunchedEffect(skipInitialRefresh) {
-        if (!hasTriggeredInitialLoad) {
-            hasTriggeredInitialLoad = true
-
-            if (!skipInitialRefresh) {
-                // Post-installation: reset and force refresh
-                appStateViewModel.resetForPostInstallation()
-            }
-
-            // Always force check on initial boot
-            appStateViewModel.checkBackendStatus(force = true)
-
-            // Proactive recovery on first launch: Always run scan if backend available
-            if (appStateViewModel.isBackendAvailable) {
-                containerViewModel.scan(showIndicator = true)
-            } else {
-                // If not available immediately, ensure we fetch when it does become available
-                containerViewModel.fetchContainerList()
-            }
-        }
-    }
-
-    // Fetch containers when backend BECOMES available or evaluates to true
-    LaunchedEffect(appStateViewModel.isBackendAvailable) {
-        if (appStateViewModel.isBackendAvailable) {
-            // Re-probe only after a reboot or a backend update, the cache covers the rest.
-            HostCapabilities.refreshIfStale(context)
-            // Because scan might be running, fetchContainerList is safe because it only
-            // cancels previous fetch jobs, and runs concurrently (which is fine, UI populates fast).
-            // We only trigger this if it's currently empty, to avoid double-fetching if scan succeeded,
-            // or just always run it since it's cheap and ensures sync.
-            if (containerViewModel.containerList.isEmpty()) {
-                containerViewModel.fetchContainerList()
-            }
-        }
-    }
-
-    // The card keeps the last settled status through a Checking pass, which is what
-    // stops it flickering during a refresh; the ViewModel already seeds that from the
-    // cached status, so a cold start shows the right card at once.
-    val currentBackendStatus = appStateViewModel.backendStatus
-    var stableDroidspacesStatus by remember { mutableStateOf(currentBackendStatus.toUi()) }
-    LaunchedEffect(currentBackendStatus) {
-        currentBackendStatus.toUi()?.let { stableDroidspacesStatus = it }
-    }
-    val droidspacesStatus: DroidspacesStatus = stableDroidspacesStatus ?: DroidspacesStatus.Working
-
-    // UI state from ViewModels
-    val isBackendAvailable = appStateViewModel.isBackendAvailable
-    // Only show checking on initial load when we don't have cached status
-    val isChecking = !appStateViewModel.hasCompletedInitialCheck && stableDroidspacesStatus == null
-    val containerCount = containerViewModel.containerCount
-    val runningCount = containerViewModel.runningCount
-
-    /**
-     * Combined refresh function for pull-to-refresh.
-     * Refreshes both backend status and container list with specialized logic per tab.
-     */
-    suspend fun performRefresh(tab: TabItem) {
-        // Check root status first (in case user denied root access)
-        appStateViewModel.checkRootStatus()
-        // Then refresh backend status
-        appStateViewModel.checkBackendStatus(force = true)
-        // Force refresh droidspaces version to get latest after backend updates
-        if (appStateViewModel.isBackendAvailable) {
-            SystemInfoManager.getDroidspacesVersion(context, force = true)
-            SystemInfoManager.getBackendMode(context, force = true)
-            HostCapabilities.refresh(context)
-
-            when (tab) {
-                TabItem.Home, TabItem.Containers -> {
-                    // Home/Containers: Always run a full scan on refresh for maximum visibility
-                    containerViewModel.scan(showIndicator = true)
-                }
-                TabItem.ControlPanel -> {
-                    // Control Panel: snappy refresh, but background recovery
-                    val rawList = withContext(Dispatchers.IO) {
-                        com.droidspaces.app.util.ContainerManager.listContainers()
-                    }
-                    val anyRunning = rawList.any { it.isRunning }
-
-                    if (!anyRunning) {
-                        // Metadata missing for running containers? attempt foreground recovery
-                        containerViewModel.scan(showIndicator = true)
-                    } else {
-                        // Running containers found, update UI normally (snappy)
-                        withContext(Dispatchers.Main) {
-                            containerViewModel.updateState(rawList)
-                        }
-                        // Then scan in background silently to catch orphans
-                        scope.launch {
-                            containerViewModel.scan(showIndicator = false)
-                        }
-                    }
-                }
-            }
-        }
-    }
+    val pagerState = rememberPagerState(pageCount = { 3 })
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
-        containerColor = Color.Transparent,
         topBar = {
-            TopAppBar(
-                title = {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) { expandedContainerName = null }
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            imageVector = DsIcons.Logo,
-                            contentDescription = null,
+                        Box(
                             modifier = Modifier
-                                .padding(end = 8.dp)
-                                .size(24.dp)
-                        )
-                        Text(
-                            text = context.getString(selectedTab.titleResId),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(imageVector = Icons.Default.Settings, contentDescription = context.getString(R.string.settings))
-                    }
-                },
-                windowInsets = WindowInsets.statusBars
-            )
-        },
-        bottomBar = {
-            // No bottom bar content here to avoid the solid background
-        },
-        contentWindowInsets = WindowInsets(0)
-    ) { innerPadding ->
-        val density = LocalDensity.current
-        // Measured height of the floating bottom bar, system nav inset included.
-        // The tabs draw under it, so anything pinned to their bottom edge offsets
-        // by this. A fixed dp guess fits gesture nav and lands behind the bar on
-        // three-button nav, whose 48dp inset is much taller.
-        var bottomBarHeight by remember { mutableStateOf(0.dp) }
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                when (tabs[page]) {
-                    TabItem.Home -> {
-                        HomeTabContent(
-                            appUpdate = appStateViewModel.appUpdate,
-                            droidspacesStatus = droidspacesStatus,
-                            isChecking = isChecking,
-                            isRootAvailable = appStateViewModel.isRootAvailable,
-                            isKernelSupported = isKernelSupported,
-                            onNavigateToInstallation = onNavigateToInstallation,
-                            onNavigateToContainers = {
-                                scope.launch {
-                                    pagerState.scrollToPage(tabs.indexOf(TabItem.Containers))
-                                }
-                            },
-                            onNavigateToControlPanel = {
-                                scope.launch {
-                                    pagerState.scrollToPage(tabs.indexOf(TabItem.ControlPanel))
-                                }
-                            },
-                            containerCount = containerCount,
-                            runningCount = runningCount,
-                            onRefresh = { performRefresh(TabItem.Home) },
-                            bottomBarInset = bottomBarHeight
-                        )
-                    }
-
-                    TabItem.Containers -> {
-                        PullToRefreshWrapper(onRefresh = { performRefresh(TabItem.Containers) }) {
-                            ContainersScreen(
-                                isBackendAvailable = isBackendAvailable,
-                                isRootAvailable = appStateViewModel.isRootAvailable,
-                                isKernelSupported = isKernelSupported,
-                                onNavigateToInstallation = onNavigateToContainerInstallation,
-                                onNavigateToEditContainer = onNavigateToEditContainer,
-                                onNavigateToContainerDetails = onNavigateToContainerDetails,
-                                containerViewModel = containerViewModel,
-                                expandedContainerName = expandedContainerName,
-                                onExpandedContainerNameChange = { expandedContainerName = it },
-                                bottomBarInset = bottomBarHeight
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Terminal,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "DROIDSPACES",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontFamily = JetBrainsMono,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.5.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "WORKSTATION v2.6",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = JetBrainsMono
+                                ),
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
 
-                    TabItem.ControlPanel -> {
-                        PullToRefreshWrapper(onRefresh = { performRefresh(TabItem.ControlPanel) }) {
-                            ControlPanelScreen(
-                                isBackendAvailable = isBackendAvailable,
-                                isRootAvailable = appStateViewModel.isRootAvailable,
-                                isKernelSupported = isKernelSupported,
-                                containerViewModel = containerViewModel,
-                                onNavigateToContainerDetails = onNavigateToContainerDetails,
-                                onNavigateToTerminal = onNavigateToTerminal,
-                                bottomBarInset = bottomBarHeight
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = onNavigateToControlPanel,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Monitor,
+                                contentDescription = "Monitor",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(
+                            onClick = onNavigateToSettings,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
             }
-
-            // Floating Bottom Bar Overlay
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .onSizeChanged { bottomBarHeight = with(density) { it.height.toDp() } }
+        },
+        bottomBar = {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 3.dp
             ) {
-                MainBottomBar(
-                    selectedTab = selectedTab,
-                    onTabSelected = { tab ->
-                        scope.launch {
-                            pagerState.scrollToPage(tabs.indexOf(tab))
-                        }
-                        expandedContainerName = null
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.navigationBarsPadding()
+                ) {
+                    val items = listOf(
+                        Triple(0, "Overview", Icons.Default.Dashboard),
+                        Triple(1, "Containers", Icons.Default.Dns),
+                        Triple(2, "Monitor", Icons.Default.Memory)
+                    )
+                    items.forEach { (index, label, icon) ->
+                        val selected = pagerState.currentPage == index
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(index)
+                                }
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = label
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontFamily = JetBrainsMono
+                                    )
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
                     }
+                }
+            }
+        }
+    ) { innerPadding ->
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) { page ->
+            when (page) {
+                0 -> DashboardOverviewTab(
+                    onNavigateToDetails = onNavigateToDetails,
+                    onNavigateToTerminal = onNavigateToTerminal,
+                    onNavigateToNewContainer = onNavigateToNewContainer,
+                    onNavigateToControlPanel = onNavigateToControlPanel,
+                    containerListViewModel = containerListViewModel
+                )
+                1 -> ContainersScreenContent(
+                    onNavigateToDetails = onNavigateToDetails,
+                    onNavigateToTerminal = onNavigateToTerminal,
+                    onNavigateToNewContainer = onNavigateToNewContainer,
+                    viewModel = containerListViewModel
+                )
+                2 -> ControlPanelScreen(
+                    onBackClick = {}
                 )
             }
         }
@@ -347,243 +222,409 @@ fun MainTabScreen(
 }
 
 @Composable
-private fun HomeTabContent(
-    appUpdate: AppUpdateInfo?,
-    droidspacesStatus: DroidspacesStatus,
-    isChecking: Boolean,
-    isRootAvailable: Boolean,
-    isKernelSupported: Boolean,
-    onNavigateToInstallation: () -> Unit,
-    onNavigateToContainers: () -> Unit,
+fun DashboardOverviewTab(
+    onNavigateToDetails: (String) -> Unit,
+    onNavigateToTerminal: (String) -> Unit,
+    onNavigateToNewContainer: () -> Unit,
     onNavigateToControlPanel: () -> Unit,
-    containerCount: Int,
-    runningCount: Int,
-    onRefresh: suspend () -> Unit,
-    bottomBarInset: Dp = 0.dp
+    containerListViewModel: ContainerListViewModel
 ) {
     val context = LocalContext.current
-    // Track refresh trigger for SystemInfoCard
-    var refreshTrigger by remember { mutableStateOf(0) }
+    val containers by containerListViewModel.containers.collectAsState()
+    val runningContainers = containers.filter { it.running }
 
-    // Taps on a healthy status card do nothing useful, so count them for the
-    // easter egg. Reset whenever the backend state changes so a tap that was
-    // meant for the installer never lands on YouTube instead.
-    var idleTaps by remember(droidspacesStatus) { mutableStateOf(0) }
+    var hostCpuUsage by remember { mutableStateOf("0.0%") }
+    var hostMemUsage by remember { mutableStateOf("0 MB") }
+    var hostMemPercent by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val memInfo = File("/proc/meminfo").readText()
+            var totalKb = 0L
+            var freeKb = 0L
+            var buffersKb = 0L
+            var cachedKb = 0L
+            for (line in memInfo.lines()) {
+                val parts = line.split("\\s+".toRegex())
+                if (parts.size >= 2) {
+                    when (parts[0]) {
+                        "MemTotal:" -> totalKb = parts[1].toLongOrNull() ?: 0L
+                        "MemFree:" -> freeKb = parts[1].toLongOrNull() ?: 0L
+                        "Buffers:" -> buffersKb = parts[1].toLongOrNull() ?: 0L
+                        "Cached:" -> cachedKb = parts[1].toLongOrNull() ?: 0L
+                    }
+                }
+            }
+            if (totalKb > 0) {
+                val usedKb = totalKb - freeKb - buffersKb - cachedKb
+                val usedMb = usedKb / 1024
+                val totalMb = totalKb / 1024
+                val ratio = usedKb.toFloat() / totalKb.toFloat()
+                hostMemUsage = "$usedMb MB / $totalMb MB"
+                hostMemPercent = ratio
+            }
+        } catch (e: Exception) {
+            val total = ResourceLimits.totalMemoryMb(context)
+            hostMemUsage = "Total $total MB"
+            hostMemPercent = 0.35f
+        }
+
+        val cores = ResourceLimits.cpuCores()
+        hostCpuUsage = "$cores Cores Active"
+    }
 
     PullToRefreshWrapper(
-        onRefresh = {
-            onRefresh()
-            refreshTrigger++
-        }
+        onRefresh = { containerListViewModel.refresh() }
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(top = 8.dp, bottom = bottomBarInset + 16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            DroidspacesStatusCard(
-                status = droidspacesStatus,
-                version = null,
-                isChecking = isChecking,
-                isRootAvailable = isRootAvailable,
-                refreshTrigger = refreshTrigger,
-                appUpdate = appUpdate,
-                isKernelSupported = isKernelSupported,
-                onClick = {
-                    if (!isRootAvailable) {
-                        // Disabled for non-root users
-                        return@DroidspacesStatusCard
-                    }
-                    if (droidspacesStatus == DroidspacesStatus.NotInstalled ||
-                        droidspacesStatus == DroidspacesStatus.UpdateAvailable ||
-                        droidspacesStatus == DroidspacesStatus.ModuleMissing
-                    ) {
-                        onNavigateToInstallation()
-                        return@DroidspacesStatusCard
-                    }
-                    if (droidspacesStatus != DroidspacesStatus.Working) return@DroidspacesStatusCard
-                    if (!isKernelSupported) {
-                        runCatching {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.KERNEL_CONFIG_DOC_URL)))
+            DsPanel {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                            Text(
+                                text = "ENGINE ONLINE",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontFamily = JetBrainsMono,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
-                        return@DroidspacesStatusCard
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${containers.size} Total • ${runningContainers.size} Running",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontFamily = JetBrainsMono,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
-                    idleTaps++
-                    when (idleTaps) {
-                        5 -> Toast.makeText(context, R.string.easter_egg_warning, Toast.LENGTH_SHORT).show()
-                        10 -> {
-                            idleTaps = 0
-                            Toast.makeText(context, R.string.easter_egg_reward, Toast.LENGTH_SHORT).show()
-                            runCatching {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(EASTER_EGG_URL)))
+                    Button(
+                        onClick = onNavigateToNewContainer,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "NEW",
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontFamily = JetBrainsMono,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                DsMetricTile(
+                    label = "Host RAM",
+                    value = hostMemUsage,
+                    subtext = "System Memory",
+                    icon = Icons.Default.Memory,
+                    progress = hostMemPercent,
+                    modifier = Modifier.weight(1f)
+                )
+                DsMetricTile(
+                    label = "CPU Cores",
+                    value = hostCpuUsage,
+                    subtext = "Architecture ${SystemInfoManager.architecture}",
+                    icon = Icons.Default.Speed,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            DsSectionLabel(
+                text = "Running Instances",
+                tag = runningContainers.size.toString(),
+                action = {
+                    TextButton(onClick = onNavigateToControlPanel) {
+                        Text(
+                            text = "Monitor →",
+                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMono),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            )
+
+            if (runningContainers.isEmpty()) {
+                DsPanel(
+                    contentPadding = PaddingValues(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Inbox,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "No running containers",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = JetBrainsMono),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                runningContainers.forEach { container ->
+                    DsPanel(
+                        modifier = Modifier.clickable { onNavigateToDetails(container.name) }
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = container.name,
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontFamily = JetBrainsMono,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = container.distribution.ifEmpty { "linux" },
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMono),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        text = "RUNNING",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = JetBrainsMono,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onNavigateToTerminal(container.name) },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Terminal,
+                                        contentDescription = "Terminal",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // The count cards lead to the other tabs, so hide them when those
-            // tabs would only show the root or kernel state.
-            if (isRootAvailable && isKernelSupported) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Container count card
-                    CountCard(Icons.Default.Layers, MaterialTheme.colorScheme.primary, containerCount, context.getString(R.string.containers), onNavigateToContainers, Modifier.weight(1f))
-
-                    // Running count card
-                    CountCard(Icons.Default.PlayCircle, MaterialTheme.colorScheme.secondary, runningCount, context.getString(R.string.running), onNavigateToControlPanel, Modifier.weight(1f))
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
             }
 
-            SystemInfoCard(refreshTrigger = refreshTrigger)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            HelpCard()
-
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-}
-
-/** One of the two 140dp count tiles on Home, leading to the tab it counts. */
-@Composable
-private fun CountCard(icon: ImageVector, tint: Color, count: Int, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.height(140.dp),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(28.dp))
-            Column {
-                Text(count.toString(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
-                Text(
-                    label.uppercase(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    letterSpacing = 1.sp
-                )
+            DsSectionLabel(text = "Environment Specs")
+            DsPanel {
+                DsCommandRow(label = "Kernel", value = SystemInfoManager.kernelVersion)
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                DsCommandRow(label = "Architecture", value = SystemInfoManager.architecture)
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                DsCommandRow(label = "Android", value = SystemInfoManager.androidVersion)
             }
         }
     }
 }
 
 @Composable
-private fun MainBottomBar(
-    selectedTab: TabItem,
-    onTabSelected: (TabItem) -> Unit
+fun ContainersScreenContent(
+    onNavigateToDetails: (String) -> Unit,
+    onNavigateToTerminal: (String) -> Unit,
+    onNavigateToNewContainer: () -> Unit,
+    viewModel: ContainerListViewModel
 ) {
-    val context = LocalContext.current
-    val tabs = TabItem.entries
-    val selectedIndex = tabs.indexOf(selectedTab)
-    
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = androidx.compose.ui.graphics.RectangleShape,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shadowElevation = 0.dp 
+    val containers by viewModel.containers.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
+    var filterRunning by remember { mutableStateOf(false) }
+
+    val filteredContainers = containers.filter { c ->
+        val matchesSearch = c.name.contains(searchQuery, ignoreCase = true) ||
+                c.distribution.contains(searchQuery, ignoreCase = true)
+        val matchesFilter = if (filterRunning) c.running else true
+        matchesSearch && matchesFilter
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                thickness = 1.dp
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.weight(1f),
+                placeholder = {
+                    Text(
+                        "Search containers...",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = JetBrainsMono)
+                    )
+                },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Default.Search, contentDescription = null)
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(8.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                )
             )
+            FilterChip(
+                selected = filterRunning,
+                onClick = { filterRunning = !filterRunning },
+                label = {
+                    Text(
+                        "Running",
+                        style = MaterialTheme.typography.labelMedium.copy(fontFamily = JetBrainsMono)
+                    )
+                },
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
+
+        if (filteredContainers.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .height(56.dp)
+                    .weight(1f),
+                contentAlignment = Alignment.Center
             ) {
-                // Background Indicator
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val tabWidth = maxWidth / tabs.size
-                    val offset by androidx.compose.animation.core.animateDpAsState(
-                        targetValue = tabWidth * selectedIndex,
-                        animationSpec = androidx.compose.animation.core.spring(
-                            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioLowBouncy,
-                            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
-                        ),
-                        label = "IndicatorOffset"
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.SearchOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(48.dp)
                     )
-
-                    Surface(
-                        modifier = Modifier
-                            .width(tabWidth)
-                            .fillMaxHeight()
-                            .offset(x = offset),
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                    ) {}
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "No matching containers",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontFamily = JetBrainsMono,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    tabs.forEach { tab ->
-                        val isSelected = selectedTab == tab
-                        val contentColor by androidx.compose.animation.animateColorAsState(
-                            targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            label = "IconColor"
-                        )
-
-                        Surface(
-                            onClick = { onTabSelected(tab) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            color = androidx.compose.ui.graphics.Color.Transparent,
-                            shape = RoundedCornerShape(16.dp)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(filteredContainers, key = { it.name }) { container ->
+                    DsPanel(
+                        modifier = Modifier.clickable { onNavigateToDetails(container.name) }
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = tab.icon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(if (isSelected) 24.dp else 22.dp),
-                                    tint = contentColor
-                                )
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = context.getString(tab.titleResId),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = contentColor,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 11.sp
+                                    text = container.name,
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontFamily = JetBrainsMono,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "distro: ${container.distribution.ifEmpty { "alpine" }} • pid: ${container.pid}",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMono),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (container.running) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+                                ) {
+                                    Text(
+                                        text = if (container.running) "UP" else "STOPPED",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = JetBrainsMono,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = if (container.running) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onNavigateToTerminal(container.name) },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Terminal,
+                                        contentDescription = "Terminal",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-            Spacer(modifier = Modifier.navigationBarsPadding())
         }
     }
-}
-
-/** The home card's view of the backend; null for Checking, which keeps the last one. */
-private fun DroidspacesBackendStatus.toUi(): DroidspacesStatus? = when (this) {
-    DroidspacesBackendStatus.Checking -> null
-    DroidspacesBackendStatus.Available -> DroidspacesStatus.Working
-    DroidspacesBackendStatus.UpdateAvailable -> DroidspacesStatus.UpdateAvailable
-    DroidspacesBackendStatus.NotInstalled -> DroidspacesStatus.NotInstalled
-    DroidspacesBackendStatus.ModuleMissing -> DroidspacesStatus.ModuleMissing
 }
