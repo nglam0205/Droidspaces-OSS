@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import androidx.compose.foundation.horizontalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -288,56 +289,55 @@ fun ContainerTerminalScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
-                .padding(horizontal = 4.dp),
+                .height(40.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { exitScreen() }) {
+            IconButton(
+                onClick = { exitScreen() },
+                modifier = Modifier.size(40.dp)
+            ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back"
                 )
             }
 
-            Spacer(modifier = Modifier.weight(1f))
-
-            IconButton(onClick = { pickUserOrOpenRoot() }) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "New terminal session"
-                )
-            }
-        }
-
-        if (tabs.isNotEmpty()) {
-            SecondaryScrollableTabRow(
-                selectedTabIndex = tabs.indexOfFirst { it.id == activeTabId }.coerceAtLeast(0),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentColor = MaterialTheme.colorScheme.primary,
-                edgePadding = 8.dp,
-                divider = {},
-                modifier = Modifier.height(40.dp)
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 tabs.forEach { tab ->
-                    val isSelected = tab.id == activeTabId
+                    val selected = tab.id == activeTabId
 
-                    Tab(
-                        selected = isSelected,
+                    Surface(
                         onClick = { activeTabId = tab.id },
-                        modifier = Modifier.height(40.dp)
+                        modifier = Modifier.height(32.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            Color.Transparent
+                        },
+                        tonalElevation = 0.dp
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(start = 8.dp, end = 4.dp)
+                            modifier = Modifier.padding(start = 8.dp, end = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = tab.user,
                                 style = MaterialTheme.typography.labelMedium,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.widthIn(max = 80.dp)
+                                modifier = Modifier.widthIn(max = 72.dp)
                             )
 
                             IconButton(
@@ -348,11 +348,11 @@ fun ContainerTerminalScreen(
                                         closeTab(tab)
                                     }
                                 },
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(28.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "Close terminal session",
+                                    contentDescription = "Close session",
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -360,12 +360,17 @@ fun ContainerTerminalScreen(
                     }
                 }
             }
-        }
 
-        HorizontalDivider(
-            thickness = 0.5.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-        )
+            IconButton(
+                onClick = { pickUserOrOpenRoot() },
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "New session"
+                )
+            }
+        }
     }
         }
     ) { paddingValues ->
